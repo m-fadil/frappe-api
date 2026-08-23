@@ -149,24 +149,11 @@ app_license = "mit"
 # Scheduled Tasks
 # ---------------
 
-# scheduler_events = {
-# 	"all": [
-# 		"api.tasks.all"
-# 	],
-# 	"daily": [
-# 		"api.tasks.daily"
-# 	],
-# 	"hourly": [
-# 		"api.tasks.hourly"
-# 	],
-# 	"weekly": [
-# 		"api.tasks.weekly"
-# 	],
-# 	"monthly": [
-# 		"api.tasks.monthly"
-# 	],
-# }
-
+scheduler_events = {
+	"daily": [
+		"api.rest_api.doctype.api_settings.api_settings.clear_old_logs",
+	],
+}
 # Testing
 # -------
 
@@ -245,12 +232,11 @@ app_license = "mit"
 # ]
 
 # Automatically update python controller files with type annotations for this app.
-# export_python_type_annotations = True
+export_python_type_annotations = True
 
-# default_log_clearing_doctypes = {
-# 	"Logging DocType Name": 30  # days to retain logs
-# }
-
+default_log_clearing_doctypes = {
+	"API Log": 30,
+}
 # Translation
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.

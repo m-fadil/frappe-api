@@ -1,0 +1,177 @@
+{
+ "actions": [],
+ "creation": "2026-08-23 00:00:00",
+ "doctype": "DocType",
+ "document_type": "System",
+ "engine": "InnoDB",
+ "field_order": [
+  "general_section",
+  "enable_api",
+  "allow_guest_access",
+  "column_break_general",
+  "enable_logging",
+  "log_errors_only",
+  "payload_section",
+  "log_request_payload",
+  "log_response_payload",
+  "column_break_payload",
+  "log_headers",
+  "mask_sensitive_data",
+  "sensitive_fields",
+  "retention_section",
+  "auto_cleanup",
+  "retention_days",
+  "column_break_retention",
+  "max_payload_size_kb",
+  "filter_section",
+  "excluded_endpoints"
+ ],
+ "fields": [
+  {
+   "fieldname": "general_section",
+   "fieldtype": "Section Break",
+   "label": "General Settings"
+  },
+  {
+   "default": "1",
+   "description": "Master switch to enable or disable all custom API endpoints",
+   "fieldname": "enable_api",
+   "fieldtype": "Check",
+   "label": "Enable API"
+  },
+  {
+   "default": "1",
+   "description": "Allow guest users to access guest-whitelisted endpoints",
+   "fieldname": "allow_guest_access",
+   "fieldtype": "Check",
+   "label": "Allow Guest Access"
+  },
+  {
+   "fieldname": "column_break_general",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Record API request and response details in API Log",
+   "fieldname": "enable_logging",
+   "fieldtype": "Check",
+   "label": "Enable Logging"
+  },
+  {
+   "default": "0",
+   "description": "When enabled, only requests with errors (HTTP status >= 400) will be recorded",
+   "fieldname": "log_errors_only",
+   "fieldtype": "Check",
+   "label": "Log Errors Only"
+  },
+  {
+   "fieldname": "payload_section",
+   "fieldtype": "Section Break",
+   "label": "Payload & Details Logging"
+  },
+  {
+   "default": "1",
+   "description": "Record request body / arguments in API Log",
+   "fieldname": "log_request_payload",
+   "fieldtype": "Check",
+   "label": "Log Request Payload"
+  },
+  {
+   "default": "1",
+   "description": "Record response data in API Log",
+   "fieldname": "log_response_payload",
+   "fieldtype": "Check",
+   "label": "Log Response Payload"
+  },
+  {
+   "fieldname": "column_break_payload",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "1",
+   "description": "Record incoming request headers",
+   "fieldname": "log_headers",
+   "fieldtype": "Check",
+   "label": "Log Request Headers"
+  },
+  {
+   "default": "1",
+   "description": "Mask sensitive fields like passwords, tokens, API keys in headers & payloads",
+   "fieldname": "mask_sensitive_data",
+   "fieldtype": "Check",
+   "label": "Mask Sensitive Data"
+  },
+  {
+   "default": "password, token, auth, secret, api_key, api_secret, access_token, refresh_token, credit_card, cvv",
+   "description": "Comma-separated field names to mask (case-insensitive)",
+   "fieldname": "sensitive_fields",
+   "fieldtype": "Small Text",
+   "label": "Sensitive Field Names"
+  },
+  {
+   "fieldname": "retention_section",
+   "fieldtype": "Section Break",
+   "label": "Log Retention & Maintenance"
+  },
+  {
+   "default": "1",
+   "description": "Automatically delete old API logs on daily schedule",
+   "fieldname": "auto_cleanup",
+   "fieldtype": "Check",
+   "label": "Auto Cleanup Logs"
+  },
+  {
+   "default": "30",
+   "description": "Delete API logs older than this number of days",
+   "fieldname": "retention_days",
+   "fieldtype": "Int",
+   "label": "Retention Period (Days)"
+  },
+  {
+   "fieldname": "column_break_retention",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "64",
+   "description": "Truncate logged payloads larger than this size in KB",
+   "fieldname": "max_payload_size_kb",
+   "fieldtype": "Int",
+   "label": "Max Payload Size (KB)"
+  },
+  {
+   "fieldname": "filter_section",
+   "fieldtype": "Section Break",
+   "label": "Endpoint Filters"
+  },
+  {
+   "description": "Comma or newline separated list of endpoints to exclude from logging (e.g. api.api.ping.ping.ping)",
+   "fieldname": "excluded_endpoints",
+   "fieldtype": "Small Text",
+   "label": "Excluded Endpoints"
+  }
+ ],
+ "icon": "fa fa-cog",
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-23 06:58:18.105451",
+ "modified_by": "Administrator",
+ "module": "REST API",
+ "name": "API Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "row_format": "Dynamic",
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}
