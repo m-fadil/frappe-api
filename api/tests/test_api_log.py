@@ -26,9 +26,7 @@ class TestAPILog(TestCase):
 		log_doc.before_insert()
 
 		self.assertEqual(log_doc.status, "Error")
-		self.assertEqual(
-			log_doc.title, "[POST] 422 api.api.customer.create_customer.create_customer"
-		)
+		self.assertEqual(log_doc.title, "[POST] 422 api.api.customer.create_customer.create_customer")
 
 	def test_clear_old_logs_calls_db_delete(self):
 		if not getattr(frappe, "db", None):
