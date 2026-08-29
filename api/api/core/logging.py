@@ -195,9 +195,7 @@ def record_api_log(
 			if endpoint in excluded_list:
 				return
 
-		sensitive_keys = (
-			_get_sensitive_keys(settings) if settings.get("mask_sensitive_data", 1) else set()
-		)
+		sensitive_keys = _get_sensitive_keys(settings) if settings.get("mask_sensitive_data", 1) else set()
 		max_kb = int(settings.get("max_payload_size_kb") or 64)
 
 		ctx = _extract_request_context()
@@ -227,26 +225,28 @@ def record_api_log(
 		status = "Success" if status_code < 400 else "Error"
 		title = f"[{method}] {status_code} {endpoint or path}".strip()
 
-		doc = frappe.get_doc({
-			"doctype": "API Log",
-			"title": title,
-			"status": status,
-			"status_code": status_code,
-			"method": method,
-			"path": path,
-			"endpoint": endpoint,
-			"execution_time": round(execution_time_ms, 2),
-			"user": ctx["user"],
-			"ip_address": ctx["ip_address"],
-			"headers": headers_str,
-			"request_data": req_str,
-			"response_data": res_str,
-			"error_code": error_code,
-			"error_message": error_message,
-			"traceback": traceback_str,
-			"user_agent": ctx["user_agent"],
-			"host": ctx["host"],
-		})
+		doc = frappe.get_doc(
+			{
+				"doctype": "API Log",
+				"title": title,
+				"status": status,
+				"status_code": status_code,
+				"method": method,
+				"path": path,
+				"endpoint": endpoint,
+				"execution_time": round(execution_time_ms, 2),
+				"user": ctx["user"],
+				"ip_address": ctx["ip_address"],
+				"headers": headers_str,
+				"request_data": req_str,
+				"response_data": res_str,
+				"error_code": error_code,
+				"error_message": error_message,
+				"traceback": traceback_str,
+				"user_agent": ctx["user_agent"],
+				"host": ctx["host"],
+			}
+		)
 		doc.flags.ignore_permissions = True
 		doc.flags.ignore_links = True
 		doc.insert(ignore_permissions=True)
