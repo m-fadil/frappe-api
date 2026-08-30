@@ -3,13 +3,11 @@ name: CI
 on:
   push:
     branches:
-      - develop
-      - main
+      - version-15
 
   pull_request:
     branches:
-      - develop
-      - main
+      - version-15
 
 concurrency:
   group: api-${{ github.event.number || github.ref }}
@@ -26,11 +24,6 @@ jobs:
           - frappe_branch: version-15
             python_version: '3.10'
             node_version: '20'
-
-          - frappe_branch: version-16
-            python_version: '3.14'
-            node_version: '24'
-
     name: Server / Frappe ${{ matrix.frappe_branch }}
 
     services:
@@ -141,7 +134,7 @@ jobs:
             --admin-password admin \
             --mariadb-user-host-login-scope='%'
 
-      - name: Install App
+      - name: Install App to Site
         working-directory: /home/runner/frappe-bench
         run: |
           bench --site test_site install-app api

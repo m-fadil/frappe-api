@@ -4,11 +4,11 @@ authors = [
     { name = "Fadil", email = "fadhilaikhsani@yahoo.com"}
 ]
 description = "Enterprise REST API toolkit for Frappe with comprehensive audit logs and runtime controls."
-requires-python = ">=3.10"
+requires-python = ">=3.10,<3.12"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    # "frappe~=16.0.0" # Installed and managed by bench.
+    # "frappe~=15.0.0" # Installed and managed by bench.
 ]
 
 [build-system]
