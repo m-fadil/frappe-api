@@ -4,11 +4,12 @@ on:
   push:
     branches:
       - develop
+      - version-16
 
   pull_request:
     branches:
       - develop
-
+      - version-16
 concurrency:
   group: api-${{ github.event.number || github.ref }}
   cancel-in-progress: true
