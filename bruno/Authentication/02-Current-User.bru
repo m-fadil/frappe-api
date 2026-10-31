@@ -1,0 +1,55 @@
+meta {
+  name: Current Frappe user via JWT
+  type: http
+  seq: 2
+  tags: [
+    auth-flow
+  ]
+}
+
+get {
+  url: {{base_url}}/api/method/frappe.auth.get_logged_user
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+tests {
+  test("JWT maps to an authenticated Frappe identity", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.message).to.be.a("string");
+    expect(res.body.message).not.to.equal("Guest");
+  });
+}
+
+docs {
+  # Native Frappe identity, dengan authentication JWT baru
+
+  Endpoint frappe.auth.get_logged_user tidak diubah oleh app ini. Yang ditambahkan:
+  api/services/auth/jwt.py:validate melalui auth_hooks untuk verifikasi JWT lalu frappe.set_user.
+  Jalankan Issue dahulu. JWT invalid/expired/wrong issuer/audience/disabled user → 401.
+  Permission user tetap Frappe native; JWT tidak memberi role System Manager.
+}
+
+example {
+  name: Authenticated integration user (illustrative)
+  request: {
+    url: {{base_url}}/api/method/frappe.auth.get_logged_user
+    method: get
+    mode: none
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":"jwt-review@example.test"}
+      '''
+    }
+  }
+}

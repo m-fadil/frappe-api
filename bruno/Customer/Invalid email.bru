@@ -1,0 +1,83 @@
+meta {
+  name: Invalid email
+  type: http
+  seq: 2
+  tags: [
+    safe
+    validation
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.customer.create
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "customer_name": "Bruno Validation Example",
+    "email": "invalid-email",
+    "phone": "0000000000"
+  }
+}
+
+tests {
+  test("HTTP 422", function () {
+    expect(res.getStatus()).to.equal(422);
+  });
+  test("Kode validasi", function () {
+    expect(res.getBody().message._code).to.equal("INVALID_EMAIL");
+    expect(res.getBody().message._status_code).to.equal(422);
+  });
+}
+
+docs {
+  Sumber: api/api/customer/create_customer.py, dto.py, pipes.py, service.py; status: api/api/core/logging.py.
+  Prasyarat: API aktif, access_token valid; bukan guest. DTO: customer_name wajib, email dan phone opsional.
+  Field JSON adalah customer_name/email/phone, bukan name/email_id/mobile_no; layanan memetakan ke field Customer.
+  Pembuatan memerlukan DocType Customer dari ERPNext/aplikasi lain dan izin create; tidak tersedia pada frappe-only. Field wajib tambahan situs juga dapat menggagalkan insert.
+  Payload email invalid-email pasti ditolak pipe sebelum insert; contoh aman tanpa guard mutasi karena tidak mencapai layanan.
+  Tidak diberi tag smoke: tetap memerlukan autentikasi. DocType/izin create tidak dicapai pada payload ini; token dan API aktif tetap diperlukan.
+  Hasil HTTP 422: message._code=INVALID_EMAIL; validator hanya memeriksa keberadaan @, bukan validasi email lengkap.
+  Test memeriksa status HTTP aktual dan kode; respons tersimpan sintetis sesuai struktur implementasi, bukan hasil eksekusi.
+}
+
+example {
+  name: Respons galat sesuai implementasi
+  description: Sintetis tersanitasi, ilustratif; bukan hasil eksekusi.
+  request: {
+    url: {{base_url}}/api/method/api.customer.create
+    method: post
+    mode: json
+    body:json: {
+      {
+        "customer_name": "Bruno Validation Example",
+        "email": "invalid-email",
+        "phone": "0000000000"
+      }
+    }
+  }
+  response: {
+    status: {
+      code: 422
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "message": {
+            "_status_code": 422,
+            "_title": "Unprocessable Entity",
+            "_detail": "Invalid email",
+            "_code": "INVALID_EMAIL"
+          }
+        }
+      '''
+    }
+  }
+}

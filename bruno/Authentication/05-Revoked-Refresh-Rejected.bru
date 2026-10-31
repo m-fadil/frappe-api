@@ -1,0 +1,66 @@
+meta {
+  name: Verify revoked refresh is rejected
+  type: http
+  seq: 5
+  tags: [
+    auth-flow
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.auth.refresh
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"refresh_token":"{{revoked_refresh_token}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("revoked_refresh_token")) {
+    throw new Error("Run Revoke first; this request deliberately uses that revoked token");
+  }
+}
+
+tests {
+  test("Revoked family cannot issue tokens", function () {
+    expect(res.status).to.equal(401);
+    expect(res.body.exc_type).to.equal("AuthenticationError");
+  });
+}
+
+docs {
+  # Negative refresh example
+
+  Jalankan setelah 04-Revoke dalam run yang sama. Request sengaja mendapat 401;
+  test lulus jika server menolak credential. Tidak menggunakan token aktif user lain.
+  Tidak menghapus record agar status revoked dapat direview di API Refresh Token.
+}
+
+example {
+  name: Revoked refresh rejected (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.refresh
+    method: post
+    mode: json
+    body:json: {
+      {"refresh_token":"<revoked-token>"}
+    }
+  }
+  response: {
+    status: {
+      code: 401
+    }
+    body: {
+      type: json
+      content: '''
+        {"exc_type":"AuthenticationError","exception":"frappe.exceptions.AuthenticationError: Invalid or expired refresh token"}
+      '''
+    }
+  }
+}

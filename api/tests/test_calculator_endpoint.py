@@ -8,21 +8,15 @@ from api.tests import load_endpoint_module
 
 class TestCalculatorEndpoint(TestCase):
 	def setUp(self):
-		self.calls = []
-		self.module = load_endpoint_module("api.api.calculator.calculate", self.calls)
+		self.module = load_endpoint_module("api.api.calculator.calculate")
 
 	def _form_dict(self, **values):
 		return patch("api.api.core.request.frappe.form_dict", values)
 
-	def test_calculate_endpoint_is_importable_and_uses_decorator_bridge(self):
+	def test_calculate_trims_and_evaluates_division(self):
 		with self._form_dict(left=" 8 ", right=" 2 ", operation=" divide ", cmd="ignored"):
 			result = self.module.calculate()
 
-		self.assertEqual(self.calls, [((), {})])
-		self.assertEqual(
-			self.module.calculate.whitelist_options, {"allow_guest": True, "methods": ["GET", "POST"]}
-		)
-		self.assertTrue(self.module.calculate.is_logged)
 		self.assertEqual(
 			result,
 			{

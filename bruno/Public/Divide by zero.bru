@@ -1,0 +1,78 @@
+meta {
+  name: Divide by zero
+  type: http
+  seq: 7
+  tags: [
+    smoke
+    safe
+    validation
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.calculator.calculate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "left": 8,
+    "right": 0,
+    "operation": "divide"
+  }
+}
+
+tests {
+  test("HTTP 422", function () {
+    expect(res.getStatus()).to.equal(422);
+  });
+  test("Kode validasi", function () {
+    expect(res.getBody().message._code).to.equal("DIVIDE_BY_ZERO");
+    expect(res.getBody().message._status_code).to.equal(422);
+  });
+}
+
+docs {
+  Sumber: api/api/calculator/calculate.py, dto.py, pipes.py, service.py.
+  Prasyarat: API aktif dan allow_guest_access diizinkan; auth none.
+  Payload JSON sengaja tidak valid; tidak ada mutasi data bisnis.
+  Hasil yang diharapkan HTTP 422: DIVIDE_BY_ZERO; test memeriksa status HTTP aktual dan kode.
+  Galat validasi memakai HTTP 422 dan message berisi _status_code, _title, _detail, _code (bukan hanya HTTP 200). API dinonaktifkan/guest diblokir gagal sebelum layanan.
+  Sumber status: api/api/core/logging.py; respons dibungkus message oleh Frappe.
+}
+
+example {
+  name: Respons galat sesuai implementasi
+  description: Sintetis tersanitasi, ilustratif; bukan hasil eksekusi.
+  request: {
+    url: {{base_url}}/api/method/api.calculator.calculate
+    method: post
+    mode: json
+    body:json: {
+      {
+        "left": 8,
+        "right": 0,
+        "operation": "divide"
+      }
+    }
+  }
+  response: {
+    status: {
+      code: 422
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "message": {
+            "_status_code": 422,
+            "_title": "Unprocessable Entity",
+            "_detail": "Cannot divide by zero",
+            "_code": "DIVIDE_BY_ZERO"
+          }
+        }
+      '''
+    }
+  }
+}

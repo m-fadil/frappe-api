@@ -1,0 +1,56 @@
+meta {
+  name: Ping
+  type: http
+  seq: 1
+  tags: [
+    smoke
+  ]
+}
+
+get {
+  url: {{base_url}}/api/method/api.ping.ping
+  body: none
+  auth: none
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Respons pong", function () {
+    expect(res.getBody().message.message).to.equal("pong");
+  });
+}
+
+docs {
+  Sumber: api/api/ping/ping.py dan service.py.
+  Prasyarat: API aktif dan allow_guest_access diizinkan; auth none.
+  Payload: tidak ada; GET tanpa parameter.
+  Sukses HTTP 200: message.message = pong.
+  Galat: penolakan API Settings atau akses guest; format penolakan mengikuti Frappe.
+}
+
+example {
+  name: Sukses ilustratif
+  description: Sintetis tersanitasi, ilustratif; bukan hasil eksekusi.
+  request: {
+    url: {{base_url}}/api/method/api.ping.ping
+    method: get
+    mode: none
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "message": {
+            "message": "pong"
+          }
+        }
+      '''
+    }
+  }
+}

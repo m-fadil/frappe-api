@@ -6,6 +6,8 @@ import frappe
 from frappe.model.document import Document
 from frappe.utils import add_days, now
 
+from api.services.auth.settings import validate_jwt_fields
+
 
 class APISettings(Document):
 	# begin: auto-generated types
@@ -36,6 +38,7 @@ class APISettings(Document):
 			frappe.throw(frappe._("Retention days must be at least 1 day."))
 		if self.max_payload_size_kb is not None and self.max_payload_size_kb < 1:
 			frappe.throw(frappe._("Max payload size must be at least 1 KB."))
+		validate_jwt_fields(self)
 
 	@frappe.whitelist()
 	def clear_logs_now(self) -> int:

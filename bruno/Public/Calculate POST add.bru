@@ -1,0 +1,80 @@
+meta {
+  name: Calculate POST add
+  type: http
+  seq: 3
+  tags: [
+    smoke
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.calculator.calculate
+  body: json
+  auth: none
+}
+
+body:json {
+  {
+    "left": 8,
+    "right": 2,
+    "operation": "add"
+  }
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Operasi, operand, dan hasil", function () {
+    expect(res.getBody().message).to.deep.equal({
+      operation: "add",
+      left: 8,
+      right: 2,
+      result: 10
+    });
+  });
+}
+
+docs {
+  Sumber: api/api/calculator/calculate.py, dto.py, pipes.py, service.py.
+  Prasyarat: API aktif dan allow_guest_access diizinkan; auth none.
+  Payload JSON: left=8, right=2, operation=add. Operand harus numerik finite.
+  Sukses HTTP 200: result=10.0. Operasi read-only; tidak perlu allow_mutations.
+  Galat validasi memakai HTTP 422 dan message berisi _status_code, _title, _detail, _code (bukan hanya HTTP 200). API dinonaktifkan/guest diblokir gagal sebelum layanan.
+  Sumber status: api/api/core/logging.py; respons dibungkus message oleh Frappe.
+}
+
+example {
+  name: Sukses ilustratif
+  description: Sintetis tersanitasi, ilustratif; bukan hasil eksekusi.
+  request: {
+    url: {{base_url}}/api/method/api.calculator.calculate
+    method: post
+    mode: json
+    body:json: {
+      {
+        "left": 8,
+        "right": 2,
+        "operation": "add"
+      }
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "message": {
+            "operation": "add",
+            "left": 8.0,
+            "right": 2.0,
+            "result": 10.0
+          }
+        }
+      '''
+    }
+  }
+}

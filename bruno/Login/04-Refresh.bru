@@ -1,0 +1,78 @@
+meta {
+  name: Rotate password-login refresh token
+  type: http
+  seq: 4
+  tags: [
+    password-login
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.auth.refresh
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"refresh_token":"{{refresh_token}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("refresh_token")) {
+    throw new Error("Complete password Login/MFA successfully in this runtime first");
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.message) {
+    bru.setVar("access_token", res.body.message.access_token);
+    bru.setVar("refresh_token", res.body.message.refresh_token);
+  }
+}
+
+tests {
+  test("Refresh rotates the runtime JWT pair with no-store", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.message.token_type).to.equal("Bearer");
+    expect(res.body.message.access_token).to.be.a("string").and.not.to.equal("");
+    expect(res.body.message.refresh_token).to.be.a("string").and.not.to.equal("");
+    expect(res.body.message.expires_in).to.be.above(0);
+    expect(res.headers["cache-control"]).to.include("no-store");
+  });
+}
+
+docs {
+  POST api.auth.refresh seperti Authentication flow, tetapi bootstrap dari
+  password Login. Tidak mengirim Authorization/password/API key/cookie sid.
+  Token refresh single-use: jangan parallel/retry token lama; replay mencabut
+  seluruh family. Script mengganti pair hanya di runtime, tanpa log/disk.
+  Absolute family expiry tidak diperpanjang; kegagalan memerlukan login baru.
+  DTO + pipes, normalize=false, AUTH_METADATA_ONLY, api_enabled, no-store.
+}
+
+example {
+  name: Rotated password-login pair (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.refresh
+    method: post
+    mode: json
+    body:json: {
+      {"refresh_token":"<current-opaque-refresh-token>"}
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":{"access_token":"<new-jwt-access-token>","refresh_token":"<new-opaque-refresh-token>","token_type":"Bearer","expires_in":900}}
+      '''
+    }
+  }
+}

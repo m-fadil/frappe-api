@@ -86,7 +86,8 @@ app_license = "mit"
 # ------------
 
 # before_install = "api.install.before_install"
-# after_install = "api.install.after_install"
+after_install = "api.services.auth.settings.initialize_jwt_settings"
+after_migrate = "api.services.auth.settings.initialize_jwt_settings"
 
 # Uninstallation
 # ------------
@@ -170,9 +171,15 @@ scheduler_events = {
 # Overriding Methods
 # ------------------------------
 #
-# override_whitelisted_methods = {
-# 	"frappe.desk.doctype.event.event.get_events": "api.event.get_events"
-# }
+override_whitelisted_methods = {
+	"api.auth.login": "api.api.auth.login",
+	"api.auth.issue": "api.api.auth.issue",
+	"api.auth.refresh": "api.api.auth.refresh",
+	"api.auth.revoke": "api.api.auth.revoke",
+	"api.ping.ping": "api.api.ping.ping.ping",
+	"api.calculator.calculate": "api.api.calculator.calculate.calculate",
+	"api.customer.create": "api.api.customer.create_customer.create_customer",
+}
 #
 # each overriding function accepts a `data` argument;
 # generated from the base implementation of the doctype dashboard,
@@ -227,9 +234,9 @@ scheduler_events = {
 # Authentication and authorization
 # --------------------------------
 
-# auth_hooks = [
-# 	"api.auth.validate"
-# ]
+auth_hooks = [
+	"api.services.auth.jwt.validate",
+]
 
 # Automatically update python controller files with type annotations for this app.
 export_python_type_annotations = True

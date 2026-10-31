@@ -1,0 +1,65 @@
+meta {
+  name: Calculate GET add
+  type: http
+  seq: 2
+  tags: [
+    smoke
+  ]
+}
+
+get {
+  url: {{base_url}}/api/method/api.calculator.calculate?left=7&right=5&operation=add
+  body: none
+  auth: none
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+  test("Operasi, operand, dan hasil", function () {
+    expect(res.getBody().message).to.deep.equal({
+      operation: "add",
+      left: 7,
+      right: 5,
+      result: 12
+    });
+  });
+}
+
+docs {
+  Sumber: api/api/calculator/calculate.py, dto.py, pipes.py, service.py.
+  Prasyarat: API aktif dan allow_guest_access diizinkan; auth none.
+  Payload query: left=7, right=5, operation=add. Operand harus numerik finite; operation wajib.
+  Sukses HTTP 200: result=12. Operasi tersedia: add, subtract, multiply, divide.
+  Galat validasi memakai HTTP 422 dan message berisi _status_code, _title, _detail, _code (bukan hanya HTTP 200). API dinonaktifkan/guest diblokir gagal sebelum layanan.
+  Sumber status: api/api/core/logging.py; respons dibungkus message oleh Frappe.
+}
+
+example {
+  name: Sukses ilustratif
+  description: Sintetis tersanitasi, ilustratif; bukan hasil eksekusi.
+  request: {
+    url: {{base_url}}/api/method/api.calculator.calculate?left=7&right=5&operation=add
+    method: get
+    mode: none
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "message": {
+            "operation": "add",
+            "left": 7.0,
+            "right": 5.0,
+            "result": 12.0
+          }
+        }
+      '''
+    }
+  }
+}

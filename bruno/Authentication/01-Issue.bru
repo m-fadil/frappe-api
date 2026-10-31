@@ -1,0 +1,90 @@
+meta {
+  name: Issue JWT pair (native API key)
+  type: http
+  seq: 1
+  tags: [
+    auth-flow
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.auth.issue
+  body: json
+  auth: none
+}
+
+headers {
+  Authorization: token {{api_key}}:{{api_secret}}
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "client_id": "{{client_id}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getEnvVar("api_key") || !bru.getEnvVar("api_secret")) {
+    throw new Error("Configure FRAPPE_API_KEY and FRAPPE_API_SECRET in the process or ignored .env");
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.message) {
+    bru.setVar("access_token", res.body.message.access_token);
+    bru.setVar("refresh_token", res.body.message.refresh_token);
+  }
+}
+
+tests {
+  test("Returns a usable token pair", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.message.token_type).to.equal("Bearer");
+    expect(res.body.message.access_token).to.be.a("string");
+    expect(res.body.message.refresh_token).to.be.a("string");
+    expect(res.body.message.expires_in).to.be.above(0);
+    expect(res.headers["cache-control"]).to.include("no-store");
+  });
+}
+
+docs {
+  # Issue token pair — endpoint baru JWT P1
+
+  Source: api/api/auth.py:issue. POST; optional client_id string maksimum 140 karakter,
+  hanya label integrasi, bukan identitas/permission client. User harus aktif.
+  Native Frappe API key, Basic key/secret, OAuth, atau session+CSRF dapat bootstrap.
+  Request contoh ini menggunakan API key. JWT tidak boleh bootstrap family baru (401).
+  Pipeline bersama: IssueTokenDTO, validate_issue_token, policy api_enabled dan
+  native_authenticated. enable_api=0 ditolak 503; policy dievaluasi sebelum payload.
+
+  Menghasilkan JWT HS256 dan opaque refresh token, menyimpan record API Refresh Token.
+  Tidak membuat login/password flow baru. Rate limit 20 request/user/menit.
+  Tidak ada credential: 401. client_id tidak valid: ValidationError Frappe.
+  Response dibungkus message, bukan object token top-level.
+  Script menyimpan pair di runtime collection; tidak menyimpannya ke disk.
+  Contoh berikut ilustratif; token bukan credential nyata.
+}
+
+example {
+  name: Issued pair (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.issue
+    method: post
+    mode: json
+    body:json: {
+      {"client_id":"bruno-review"}
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":{"access_token":"<jwt-access-token>","refresh_token":"<opaque-refresh-token>","token_type":"Bearer","expires_in":900}}
+      '''
+    }
+  }
+}
