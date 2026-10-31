@@ -90,6 +90,11 @@ and there is no fallback to the site's encryption key. Signing secrets must
 contain at least 32 UTF-8 bytes. Changing the signing secret invalidates existing
 access tokens. Restrict API Settings access to trusted System Managers.
 
+The JWT auth hook assigns the Frappe user only after verifying the HS256
+signature, required claims, issuer, audience, token type, and active user.
+Its `frappe.set_user` call has a single-line Semgrep exception for the
+Frappe manual-audit rule; other occurrences remain subject to that rule.
+
 For upgrades that introduce DocType changes, run `bench --site <site> migrate`
 and `bench restart`. The auth service reorganization alone only needs the
 clear-cache and restart deployment steps above.
