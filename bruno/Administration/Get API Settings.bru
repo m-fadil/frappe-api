@@ -1,0 +1,57 @@
+meta {
+  name: Get API Settings
+  type: http
+  seq: 1
+  tags: [
+    admin-read
+  ]
+}
+
+get {
+  url: {{base_url}}/api/resource/API%20Settings/API%20Settings
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Rute REST v1 bawaan Frappe, bukan endpoint RPC kustom aplikasi. Sumber framework: frappe/api/v1.py (routing, izin dan operasi dokumen), frappe/api/__init__.py (envelope data). Syarat: base_url situs tanpa slash akhir; access_token JWT aktif dari Authentication milik pengguna System Manager. Izin DocType tetap diperiksa; token tidak memberikan hak tambahan. Error framework dapat berupa 401 AuthenticationError, 403 PermissionError, 404 DoesNotExistError, atau 417 ValidationError; bentuk exc_type/exception/_server_messages bukan envelope error kustom aplikasi. Contoh tersimpan sintetis, disanitasi, ilustratif, bukan hasil eksekusi; representasi dokumen dapat memuat field tambahan.
+
+  Sumber aplikasi: api/rest_api/doctype/api_settings/api_settings.json dan api_settings.py; api/services/auth/settings.py. Single DocType API Settings dibaca sebagai dokumen bernama API Settings. Sukses 200: data objek konfigurasi; Password JWT tidak ditampilkan sebagai plaintext. Contoh hanya subset non-rahasia. Nilai kosong issuer/audience menggunakan site_config lalu nama situs/api; TTL kosong atau nol menggunakan site_config lalu 900/2592000 detik.
+  Payload: tidak ada (GET); parameter hanya URL/query.
+}
+
+example {
+  name: Ilustratif sintetis - Get API Settings
+  description: Respons sintetis disanitasi; bukan hasil request nyata
+  request: {
+    url: {{base_url}}/api/resource/API%20Settings/API%20Settings
+    method: get
+    mode: none
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "data": {
+            "doctype": "API Settings",
+            "name": "API Settings",
+            "api_jwt_issuer": "demo.example.invalid",
+            "api_jwt_audience": "api",
+            "api_jwt_access_token_ttl": 900,
+            "api_jwt_refresh_token_ttl": 2592000,
+            "retention_days": 30,
+            "max_payload_size_kb": 64
+          }
+        }
+      '''
+    }
+  }
+}

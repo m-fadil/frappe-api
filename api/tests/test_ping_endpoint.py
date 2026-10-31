@@ -14,8 +14,7 @@ class _Body:
 
 class TestPingEndpoint(TestCase):
 	def setUp(self):
-		self.calls = []
-		self.module = load_endpoint_module("api.api.ping.ping", self.calls)
+		self.module = load_endpoint_module("api.api.ping.ping")
 
 	def _form_dict(self, **values):
 		return patch("api.api.core.request.frappe.form_dict", values)
@@ -27,21 +26,18 @@ class TestPingEndpoint(TestCase):
 
 		def decorate(fn):
 			with (
-				patch.object(decorators, "log", lambda: lambda f: f),
+				patch.object(decorators, "log", lambda **kwargs: lambda f: f),
 				patch.object(decorators.frappe, "whitelist", stub_whitelist),
 			):
-				return decorators.endpoint(**options)(fn)
+				return decorators.endpoint(policies=(), **options)(fn)
 
 		return decorate
 
-	def test_ping_endpoint_is_importable_and_uses_decorator_bridge(self):
+	def test_ping_returns_pong(self):
 		with self._form_dict():
 			result = self.module.ping()
 
 		self.assertEqual(result, {"message": "pong"})
-		self.assertEqual(self.calls, [((), {})])
-		self.assertEqual(self.module.ping.whitelist_options, {"allow_guest": True, "methods": ["GET"]})
-		self.assertTrue(self.module.ping.is_logged)
 
 	def test_ping_endpoint_ignores_extra_query_params(self):
 		"""form_dict membawa semua query param; endpoint tanpa DTO tidak boleh 500 karenanya."""

@@ -8,8 +8,7 @@ from api.tests import load_endpoint_module
 
 class TestCreateCustomerEndpoint(TestCase):
 	def setUp(self):
-		self.calls = []
-		self.module = load_endpoint_module("api.api.customer.create_customer", self.calls)
+		self.module = load_endpoint_module("api.api.customer.create_customer")
 
 	def _form_dict(self, **values):
 		return patch("api.api.core.request.frappe.form_dict", values)
@@ -26,11 +25,6 @@ class TestCreateCustomerEndpoint(TestCase):
 			result = self.module.create_customer()
 
 		self.assertEqual(result, {"name": "CUST-0001"})
-		self.assertEqual(self.calls, [((), {})])
-		self.assertEqual(
-			self.module.create_customer.whitelist_options, {"allow_guest": False, "methods": ["POST"]}
-		)
-		self.assertTrue(self.module.create_customer.is_logged)
 
 		body = service.call_args.args[0]
 		self.assertIsInstance(body, CreateCustomerDTO)

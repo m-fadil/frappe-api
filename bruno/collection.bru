@@ -1,0 +1,52 @@
+headers {
+  Accept: application/json
+}
+
+vars:pre-request {
+  access_token:
+  refresh_token:
+  revoked_refresh_token:
+  client_id: bruno-review
+  login_tmp_id:
+  login_user_profile:
+  customer_name: Bruno Review Customer
+  customer_email: bruno-review@example.test
+  customer_phone: +628123456789
+  api_log_name: replace-with-log-name
+  refresh_token_name: replace-with-refresh-record-name
+  allow_mutations: false
+}
+
+script:pre-request {
+  bru.setVar("allow_mutations", bru.getEnvVar("allow_mutations") || "false");
+}
+
+docs {
+  # Frappe REST API Toolkit
+
+  Dokumentasi executable untuk endpoint app `api` dan resource Frappe yang
+  mengekspos DocType app ini. Buka folder ini sebagai collection di Bruno.
+
+  Mulai dengan environment Local, jalankan folder Public tanpa credential.
+  Untuk JWT tanpa API key: Login → Current User → Refresh → Revoke, filter
+  --tags password-login. Complete MFA bertag mfa saja dan harus dijalankan
+  terpisah setelah challenge, dalam runtime yang sama.
+  Authentication tetap memakai API key/secret native untuk Issue, filter
+  --tags auth-flow. Refresh/revoke tidak mengirim Authorization agar JWT expired
+  tidak menghalangi refresh. Password login tidak membuat authenticated sid.
+
+  Token, challenge tmp_id dan own safe profile hanya runtime, bukan environment/disk.
+  Jangan gunakan mode parallel pada refresh: token single-use, replay mencabut
+  seluruh family. Revoke tidak langsung membatalkan access JWT yang sudah terbit.
+
+  Operasi Customer, Update Settings, dan Clear Logs memerlukan allow_mutations=true.
+  Clear Logs menghapus data permanen. Jangan jalankan collection rekursif tanpa
+  membaca request. Gunakan --tags smoke untuk public smoke, --tags password-login
+  untuk password JWT, atau --tags auth-flow untuk bootstrap API key yang lama.
+  Gunakan --disable-cookies agar tidak terpengaruh session browser.
+
+  Contoh response adalah ilustrasi tersanitasi, bukan credential atau rekaman
+  produksi. API custom dan JWT memakai envelope message; resource Frappe memakai
+  data. Nama endpoint/source dan perubahan dijelaskan di masing-masing request.
+  Lihat README.md untuk inventory, dependency Customer, dan perintah CLI.
+}

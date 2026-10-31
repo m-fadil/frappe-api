@@ -1,0 +1,68 @@
+meta {
+  name: Clear Old API Logs
+  type: http
+  seq: 7
+  tags: [
+    mutation
+    destructive
+  ]
+}
+
+post {
+  url: {{base_url}}/api/resource/API%20Settings/API%20Settings
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "run_method": "clear_logs_now"
+  }
+}
+
+script:pre-request {
+  if (String(bru.getVar("allow_mutations")) !== "true") { throw new Error("Set allow_mutations=true explicitly to run this mutation"); }
+}
+
+docs {
+  Rute REST v1 bawaan Frappe, bukan endpoint RPC kustom aplikasi. Sumber framework: frappe/api/v1.py (routing, izin dan operasi dokumen), frappe/api/__init__.py (envelope data). Syarat: base_url situs tanpa slash akhir; access_token JWT aktif dari Authentication milik pengguna System Manager. Izin DocType tetap diperiksa; token tidak memberikan hak tambahan. Error framework dapat berupa 401 AuthenticationError, 403 PermissionError, 404 DoesNotExistError, atau 417 ValidationError; bentuk exc_type/exception/_server_messages bukan envelope error kustom aplikasi. Contoh tersimpan sintetis, disanitasi, ilustratif, bukan hasil eksekusi; representasi dokumen dapat memuat field tambahan.
+
+  Rute native document method POST, bukan /api/method RPC. Sumber framework: frappe/api/v1.py:execute_doc_method (POST memeriksa write, whitelist dan HTTP method), url_rules; aplikasi: api/rest_api/doctype/api_settings/api_settings.py:clear_logs_now/clear_old_logs. Body run_method dipop oleh router; nama Single tetap API Settings. Syarat tambahan: izin write System Manager, allow_mutations=true dan persetujuan operasional untuk menghapus log permanen. DESTRUKTIF: menghapus API Log dengan creation lebih lama dari retention_days (fallback 30, minimal 1); bukan semua log, tidak membersihkan refresh token. Pemanggilan manual tidak bergantung auto_cleanup. Sukses 200: data angka jumlah terhapus, bukan message; _server_messages dapat ikut berisi notifikasi Desk. Nilai 0 juga dapat berarti exception internal ditangkap controller; bukan bukti cleanup berhasil. Jangan jalankan sebagai smoke test; koleksi ini tidak mengeksekusi cleanup otomatis.
+  Payload contoh ada pada body JSON di atas.
+}
+
+example {
+  name: Ilustratif sintetis - Clear Old API Logs
+  description: Respons sintetis disanitasi; bukan hasil request nyata
+  request: {
+    url: {{base_url}}/api/resource/API%20Settings/API%20Settings
+    method: post
+    mode: json
+    body:json: {
+      {
+        "run_method": "clear_logs_now"
+      }
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "data": 3
+        }
+      '''
+    }
+  }
+}

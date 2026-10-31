@@ -1,0 +1,16 @@
+meta {
+  name: Login
+  seq: 1
+}
+
+docs {
+  Password JWT flow, tanpa API key/secret atau authenticated Frappe sid.
+  Jalankan --tags password-login: Login → Current User → Refresh → Revoke.
+  Complete MFA hanya bertag mfa; jalankan terpisah setelah challenge awal, dalam
+  runtime GUI yang sama. Jangan jalankan folder rekursif tanpa filtering tags.
+  Credential process environment hanya dikirim ke login; token/profile/tmp_id
+  disimpan di runtime variables, tidak ditulis ke environment atau disk.
+  Login memakai DTO + pipes, normalize=false, AUTH_METADATA_ONLY, api_enabled,
+  rate limit 10/IP/menit dan Cache-Control: no-store termasuk saat gagal.
+  Password, challenge, dan token tidak boleh dimasukkan ke log/report.
+}

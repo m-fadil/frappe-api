@@ -1,0 +1,57 @@
+meta {
+  name: Get API Log
+  type: http
+  seq: 4
+  tags: [
+    admin-read
+  ]
+}
+
+get {
+  url: {{base_url}}/api/resource/API%20Log/{{api_log_name}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Rute REST v1 bawaan Frappe, bukan endpoint RPC kustom aplikasi. Sumber framework: frappe/api/v1.py (routing, izin dan operasi dokumen), frappe/api/__init__.py (envelope data). Syarat: base_url situs tanpa slash akhir; access_token JWT aktif dari Authentication milik pengguna System Manager. Izin DocType tetap diperiksa; token tidak memberikan hak tambahan. Error framework dapat berupa 401 AuthenticationError, 403 PermissionError, 404 DoesNotExistError, atau 417 ValidationError; bentuk exc_type/exception/_server_messages bukan envelope error kustom aplikasi. Contoh tersimpan sintetis, disanitasi, ilustratif, bukan hasil eksekusi; representasi dokumen dapat memuat field tambahan.
+
+  Sumber schema aplikasi: api/rest_api/doctype/api_log/api_log.json. Syarat tambahan: api_log_name nama dokumen nyata dari daftar (URL-encode bila mengandung karakter khusus). Sukses 200: data dokumen log, termasuk field payload/header/error jika tersimpan. Informasi log dapat sensitif walau masking aktif; jangan ekspor respons produksi. Contoh membatasi data pada metadata sintetis. Nama tidak ada: 404.
+  Payload: tidak ada (GET); parameter hanya URL/query.
+}
+
+example {
+  name: Ilustratif sintetis - Get API Log
+  description: Respons sintetis disanitasi; bukan hasil request nyata
+  request: {
+    url: {{base_url}}/api/resource/API%20Log/{{api_log_name}}
+    method: get
+    mode: none
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "data": {
+            "doctype": "API Log",
+            "name": "illustrative-log-001",
+            "title": "GET ping",
+            "status": "Success",
+            "status_code": 200,
+            "method": "GET",
+            "endpoint": "api.api.ping.ping.ping",
+            "execution_time": 4.2
+          }
+        }
+      '''
+    }
+  }
+}

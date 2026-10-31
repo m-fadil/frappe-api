@@ -1,0 +1,79 @@
+meta {
+  name: Create customer
+  type: http
+  seq: 1
+  tags: [
+    mutation
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.customer.create
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+body:json {
+  {
+    "customer_name": "{{customer_name}}",
+    "email": "{{customer_email}}",
+    "phone": "{{customer_phone}}"
+  }
+}
+
+script:pre-request {
+  if (String(bru.getVar("allow_mutations")) !== "true") { throw new Error("Set allow_mutations=true explicitly to run this mutation"); }
+}
+
+tests {
+  test("HTTP 200", function () {
+    expect(res.getStatus()).to.equal(200);
+  });
+}
+
+docs {
+  Sumber: api/api/customer/create_customer.py, dto.py, pipes.py, service.py; status: api/api/core/logging.py.
+  Prasyarat: API aktif, access_token valid; bukan guest. DTO: customer_name wajib, email dan phone opsional.
+  Field JSON adalah customer_name/email/phone, bukan name/email_id/mobile_no; layanan memetakan ke field Customer.
+  Pembuatan memerlukan DocType Customer dari ERPNext/aplikasi lain dan izin create; tidak tersedia pada frappe-only. Field wajib tambahan situs juga dapat menggagalkan insert.
+  Set allow_mutations=true secara eksplisit sebelum menjalankan; akan membuat dokumen nyata.
+  Sukses HTTP 200: message.name adalah ID dokumen baru (bukan customer_name yang dijamin sama).
+  Galat validasi HTTP 422: CUSTOMER_NAME_REQUIRED atau INVALID_EMAIL. Penolakan autentikasi mengikuti Frappe. Kegagalan insert/izin/DocType dalam layanan ditangkap sebagai HTTP 500 INTERNAL_SERVER_ERROR; detail tergantung situs.
+  Respons tersimpan hanya ilustrasi tersanitasi, bukan bukti Customer tersedia.
+}
+
+example {
+  name: Sukses ilustratif
+  description: Sintetis tersanitasi, ilustratif; bukan hasil eksekusi.
+  request: {
+    url: {{base_url}}/api/method/api.customer.create
+    method: post
+    mode: json
+    body:json: {
+      {
+        "customer_name": "{{customer_name}}",
+        "email": "{{customer_email}}",
+        "phone": "{{customer_phone}}"
+      }
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "message": {
+            "name": "CUST-ILLUSTRATIVE-0001"
+          }
+        }
+      '''
+    }
+  }
+}

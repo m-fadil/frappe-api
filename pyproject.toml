@@ -8,6 +8,7 @@ requires-python = ">=3.10,<3.12"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
+    "PyJWT~=2.15.0",
     # "frappe~=15.0.0" # Installed and managed by bench.
 ]
 

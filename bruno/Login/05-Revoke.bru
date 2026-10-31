@@ -1,0 +1,81 @@
+meta {
+  name: Revoke password-login refresh family
+  type: http
+  seq: 5
+  tags: [
+    password-login
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.auth.revoke
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"refresh_token":"{{refresh_token}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("refresh_token")) {
+    throw new Error("Complete password Login/MFA or Refresh successfully in this runtime first");
+  }
+}
+
+script:post-response {
+  if (res.status === 200) {
+    bru.setVar("access_token", "");
+    bru.setVar("refresh_token", "");
+    bru.setVar("login_tmp_id", "");
+    bru.setVar("login_user_profile", null);
+  }
+}
+
+tests {
+  test("Revoke clears the runtime login state with no-store", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.message.revoked).to.equal(true);
+    expect(res.headers["cache-control"]).to.include("no-store");
+    expect(bru.getVar("access_token")).to.equal("");
+    expect(bru.getVar("refresh_token")).to.equal("");
+    expect(bru.getVar("login_tmp_id")).to.equal("");
+    expect(bru.getVar("login_user_profile")).to.equal(null);
+  });
+}
+
+docs {
+  POST api.auth.revoke, tanpa Authorization/API key/password. Revoke seluruh
+  refresh family, bukan menghapus audit record atau membatalkan access JWT
+  yang sudah terbit. JWT tersebut tetap valid sampai expiry; client membuangnya.
+  Sukses menghapus token, tmp_id dan own profile dari runtime, tidak menyalin
+  token revoked ke disk/log. DTO/pipes, normalize=false, AUTH_METADATA_ONLY,
+  api_enabled, no-store; logout tetap tersedia jika guest business API diblokir.
+}
+
+example {
+  name: Password-login family revoked (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.revoke
+    method: post
+    mode: json
+    body:json: {
+      {"refresh_token":"<opaque-refresh-token>"}
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":{"revoked":true}}
+      '''
+    }
+  }
+}

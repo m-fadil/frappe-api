@@ -5,6 +5,7 @@
  "document_type": "System",
  "engine": "InnoDB",
  "field_order": [
+  "general_tab",
   "general_section",
   "enable_api",
   "allow_guest_access",
@@ -24,9 +25,20 @@
   "column_break_retention",
   "max_payload_size_kb",
   "filter_section",
-  "excluded_endpoints"
+  "excluded_endpoints",
+  "authentication_tab",
+  "api_jwt_secret",
+  "api_jwt_issuer",
+  "api_jwt_audience",
+  "api_jwt_access_token_ttl",
+  "api_jwt_refresh_token_ttl"
  ],
  "fields": [
+  {
+   "fieldname": "general_tab",
+   "fieldtype": "Tab Break",
+   "label": "General"
+  },
   {
    "fieldname": "general_section",
    "fieldtype": "Section Break",
@@ -148,6 +160,44 @@
    "fieldname": "excluded_endpoints",
    "fieldtype": "Small Text",
    "label": "Excluded Endpoints"
+  },
+  {
+   "fieldname": "authentication_tab",
+   "fieldtype": "Tab Break",
+   "label": "Authentication"
+  },
+  {
+   "description": "JWT signing secret (at least 32 UTF-8 bytes). Leave empty to use api_jwt_secret from site_config.json.",
+   "fieldname": "api_jwt_secret",
+   "fieldtype": "Password",
+   "label": "JWT Signing Secret",
+   "no_copy": 1,
+   "print_hide": 1,
+   "report_hide": 1
+  },
+  {
+   "description": "Leave empty to use api_jwt_issuer from site_config.json, then the current site name.",
+   "fieldname": "api_jwt_issuer",
+   "fieldtype": "Data",
+   "label": "JWT Issuer"
+  },
+  {
+   "description": "Leave empty to use api_jwt_audience from site_config.json, then api.",
+   "fieldname": "api_jwt_audience",
+   "fieldtype": "Data",
+   "label": "JWT Audience"
+  },
+  {
+   "description": "Positive integer seconds. Leave empty or zero to use api_jwt_access_token_ttl from site_config.json, then 900 seconds.",
+   "fieldname": "api_jwt_access_token_ttl",
+   "fieldtype": "Int",
+   "label": "Access Token Lifetime (Seconds)"
+  },
+  {
+   "description": "Positive integer seconds. Leave empty or zero to use api_jwt_refresh_token_ttl from site_config.json, then 2592000 seconds.",
+   "fieldname": "api_jwt_refresh_token_ttl",
+   "fieldtype": "Int",
+   "label": "Refresh Token Lifetime (Seconds)"
   }
  ],
  "icon": "fa fa-cog",
