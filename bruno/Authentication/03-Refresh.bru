@@ -1,0 +1,106 @@
+meta {
+  name: Rotate refresh token
+  type: http
+  seq: 3
+  tags: [
+    auth-flow
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.auth.refresh
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {"refresh_token":"{{refresh_token}}"}
+}
+
+script:pre-request {
+  if (!bru.getVar("refresh_token")) {
+    throw new Error("Run Issue first, or supply a current refresh_token privately");
+  }
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.message) {
+    bru.setVar("access_token", res.body.message.access_token);
+    bru.setVar("refresh_token", res.body.message.refresh_token);
+  }
+}
+
+tests {
+  test("Refresh returns a new pair with no-store", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.message.token_type).to.equal("Bearer");
+    expect(res.body.message.expires_in).to.be.above(0);
+    expect(res.headers["cache-control"]).to.include("no-store");
+  });
+}
+
+docs {
+  # Refresh — endpoint baru JWT P1
+
+  Source: api/api/auth.py:refresh dan api/services/auth/refresh_tokens.py:rotate.
+  POST, tanpa Authorization header. refresh_token wajib string opaque yang masih valid.
+  Tidak memerlukan access JWT karena biasanya sudah expired. Rate limit 30/IP/menit.
+  Menghasilkan pair baru dan menandai token lama used secara atomik. Script langsung
+  mengganti runtime pair. Family expiry absolut tidak diperpanjang oleh refresh.
+
+  Jangan retry/parallel menggunakan token lama: replay → 401 dan revoke seluruh family.
+  Expired/revoked/disabled-user juga 401. Jika refresh gagal, gunakan native auth untuk
+  issue family baru; backend tidak melakukan automatic refresh untuk client.
+  Mengubah signing secret/issuer/audience membatalkan access JWT lama tetapi tidak
+  refresh family; refresh yang valid menerbitkan JWT dengan konfigurasi baru.
+}
+
+example {
+  name: Rotated pair (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.refresh
+    method: post
+    mode: json
+    body:json: {
+      {"refresh_token":"<current-opaque-refresh-token>"}
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":{"access_token":"<new-jwt>","refresh_token":"<new-opaque-token>","token_type":"Bearer","expires_in":900}}
+      '''
+    }
+  }
+}
+
+example {
+  name: Invalid expired or replayed token (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.refresh
+    method: post
+    mode: json
+    body:json: {
+      {"refresh_token":"<used-or-expired-token>"}
+    }
+  }
+  response: {
+    status: {
+      code: 401
+    }
+    body: {
+      type: json
+      content: '''
+        {"exc_type":"AuthenticationError","exception":"frappe.exceptions.AuthenticationError: Invalid or expired refresh token"}
+      '''
+    }
+  }
+}

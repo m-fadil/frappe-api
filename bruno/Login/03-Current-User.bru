@@ -1,0 +1,63 @@
+meta {
+  name: Current user after password login
+  type: http
+  seq: 3
+  tags: [
+    password-login
+  ]
+}
+
+get {
+  url: {{base_url}}/api/method/frappe.auth.get_logged_user
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+script:pre-request {
+  if (bru.getVar("login_tmp_id")) {
+    throw new Error("MFA required: run Complete MFA in the same runtime before Current User, Refresh and Revoke");
+  }
+  if (!bru.getVar("access_token") || !bru.getVar("login_user_profile")) {
+    throw new Error("Run password Login or Complete MFA successfully first");
+  }
+}
+
+tests {
+  test("JWT identity matches the safe own profile returned at login", function () {
+    expect(res.status).to.equal(200);
+    expect(res.body.message).not.to.equal("Guest");
+    expect(res.body.message).to.equal(bru.getVar("login_user_profile").name);
+  });
+}
+
+docs {
+  Native frappe.auth.get_logged_user tidak diubah. JWT auth hook mengatur user
+  untuk request ini, bukan authenticated session sid. Bandingkan canonical user
+  dengan name pada login_user_profile, bukan usr yang mungkin berupa username.
+  Memerlukan sukses Login/Complete MFA pada runtime yang sama. Tidak mengirim
+  password/API key. Jalankan CLI --disable-cookies agar bukti auth berasal JWT.
+}
+
+example {
+  name: Canonical own user identity (illustrative)
+  request: {
+    url: {{base_url}}/api/method/frappe.auth.get_logged_user
+    method: get
+    mode: none
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":"login-user@example.test"}
+      '''
+    }
+  }
+}

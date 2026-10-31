@@ -1,0 +1,82 @@
+meta {
+  name: Update JWT Settings
+  type: http
+  seq: 2
+  tags: [
+    mutation
+  ]
+}
+
+put {
+  url: {{base_url}}/api/resource/API%20Settings/API%20Settings
+  body: json
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "api_jwt_issuer": "demo.example.invalid",
+    "api_jwt_audience": "api",
+    "api_jwt_access_token_ttl": 900,
+    "api_jwt_refresh_token_ttl": 2592000
+  }
+}
+
+script:pre-request {
+  if (String(bru.getVar("allow_mutations")) !== "true") { throw new Error("Set allow_mutations=true explicitly to run this mutation"); }
+}
+
+docs {
+  Rute REST v1 bawaan Frappe, bukan endpoint RPC kustom aplikasi. Sumber framework: frappe/api/v1.py (routing, izin dan operasi dokumen), frappe/api/__init__.py (envelope data). Syarat: base_url situs tanpa slash akhir; access_token JWT aktif dari Authentication milik pengguna System Manager. Izin DocType tetap diperiksa; token tidak memberikan hak tambahan. Error framework dapat berupa 401 AuthenticationError, 403 PermissionError, 404 DoesNotExistError, atau 417 ValidationError; bentuk exc_type/exception/_server_messages bukan envelope error kustom aplikasi. Contoh tersimpan sintetis, disanitasi, ilustratif, bukan hasil eksekusi; representasi dokumen dapat memuat field tambahan.
+
+  Sumber aplikasi: api/rest_api/doctype/api_settings/api_settings.json, api_settings.py:validate dan api/services/auth/settings.py:validate_jwt_fields. Syarat tambahan: izin write System Manager dan allow_mutations=true secara eksplisit. Payload parsial hanya issuer, audience dan TTL non-rahasia; field lain dipertahankan. Sukses 200: data dokumen tersimpan. TTL eksplisit harus integer positif dalam detik; nol/kosong berarti fallback. Retention dan ukuran payload minimal 1 jika diubah. Jangan masukkan signing secret ke koleksi atau contoh. Secret minimal 32 byte UTF-8; perubahan secret menginvalidasi access JWT lama, tetapi tidak otomatis mencabut refresh token. Refresh token yang masih valid dapat menerbitkan pasangan token baru dengan konfigurasi baru; autentikasi awal diperlukan bila refresh token sudah dicabut atau kedaluwarsa. Perubahan issuer/audience juga dapat membuat access token lama ditolak. Perubahan TTL memengaruhi penerbitan berikutnya. Simpan perubahan rahasia lewat saluran administrasi aman.
+  Payload contoh ada pada body JSON di atas.
+}
+
+example {
+  name: Ilustratif sintetis - Update JWT Settings
+  description: Respons sintetis disanitasi; bukan hasil request nyata
+  request: {
+    url: {{base_url}}/api/resource/API%20Settings/API%20Settings
+    method: put
+    mode: json
+    body:json: {
+      {
+        "api_jwt_issuer": "demo.example.invalid",
+        "api_jwt_audience": "api",
+        "api_jwt_access_token_ttl": 900,
+        "api_jwt_refresh_token_ttl": 2592000
+      }
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "data": {
+            "doctype": "API Settings",
+            "name": "API Settings",
+            "api_jwt_issuer": "demo.example.invalid",
+            "api_jwt_audience": "api",
+            "api_jwt_access_token_ttl": 900,
+            "api_jwt_refresh_token_ttl": 2592000,
+            "retention_days": 30,
+            "max_payload_size_kb": 64
+          }
+        }
+      '''
+    }
+  }
+}

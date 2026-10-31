@@ -1,0 +1,177 @@
+meta {
+  name: Login with Frappe password
+  type: http
+  seq: 1
+  tags: [
+    password-login
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.auth.login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "usr": "{{login_user}}",
+    "pwd": "{{login_password}}",
+    "client_id": "{{client_id}}"
+  }
+}
+
+script:pre-request {
+  bru.setVar("access_token", "");
+  bru.setVar("refresh_token", "");
+  bru.setVar("login_tmp_id", "");
+  bru.setVar("login_user_profile", null);
+  if (!bru.getEnvVar("login_user") || !bru.getEnvVar("login_password")) {
+    throw new Error("Configure FRAPPE_LOGIN_USER and FRAPPE_LOGIN_PASSWORD in the process or ignored .env");
+  }
+  req.setBody({
+    usr: bru.interpolate("{{login_user}}"),
+    pwd: bru.interpolate("{{login_password}}"),
+    client_id: bru.interpolate("{{client_id}}")
+  });
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.message) {
+    const result = res.body.message;
+    if (result.mfa_required === true) {
+      bru.setVar("login_tmp_id", result.tmp_id);
+    } else if (result.access_token && result.refresh_token && result.user) {
+      bru.setVar("access_token", result.access_token);
+      bru.setVar("refresh_token", result.refresh_token);
+      bru.setVar("login_user_profile", result.user);
+    }
+  }
+}
+
+tests {
+  test("Login returns a JWT pair and safe profile, or an MFA challenge", function () {
+    expect(res.status).to.equal(200);
+    expect(res.headers["cache-control"]).to.include("no-store");
+    const result = res.body.message;
+    if (result.mfa_required === true) {
+      expect(result.tmp_id).to.be.a("string").and.not.to.equal("");
+      expect(result.verification).to.be.an("object");
+      expect(result).not.to.have.property("access_token");
+      expect(result).not.to.have.property("refresh_token");
+      expect(result).not.to.have.property("user");
+      expect(bru.getVar("access_token")).to.equal("");
+      expect(bru.getVar("refresh_token")).to.equal("");
+    } else {
+      expect(result.token_type).to.equal("Bearer");
+      expect(result.access_token).to.be.a("string").and.not.to.equal("");
+      expect(result.refresh_token).to.be.a("string").and.not.to.equal("");
+      expect(result.expires_in).to.be.above(0);
+      expect(result.user.name).to.be.a("string").and.not.to.equal("Guest");
+      expect(result.user.roles).to.be.an("array");
+      const allowed = ["name", "email", "first_name", "last_name", "full_name", "user_image", "language", "time_zone", "user_type", "roles"];
+      expect(Object.keys(result.user).every(key => allowed.includes(key))).to.equal(true);
+    }
+  });
+}
+
+docs {
+  # Password login — JWT dan own safe profile
+
+  POST api.auth.login → api/api/auth.py:login. Tanpa Authorization/API key/secret.
+  usr/pwd berasal dari FRAPPE_LOGIN_USER/FRAPPE_LOGIN_PASSWORD; client_id adalah
+  label runtime, bukan credential. req.setBody melakukan serialisasi JSON agar
+  karakter password tidak dinormalisasi atau diinterpolasi sebagai struktur JSON.
+  Tidak mencatat credential/token dan tidak menulisnya ke environment/disk.
+
+  Native Frappe LoginManager tetap menerapkan disabled password login, failed-login
+  tracking, enabled user, MFA, IP/login hours, forced password reset dan hooks.
+  Tidak membuat authenticated Frappe sid. Gunakan --disable-cookies.
+  DTO/pipes memvalidasi usr,pwd,otp,tmp_id,client_id; normalize=false,
+  telemetry AUTH_METADATA_ONLY, policy api_enabled dan rate limit 10/IP/menit.
+  Login memakai xss_safe=true agar sanitasi guest Frappe tidak mengubah karakter
+  password; respons tetap JSON dan tidak merender password sebagai HTML.
+  Response sukses maupun gagal no-store. Native auth/reset errors tetap native;
+  password reset wajib tidak menerbitkan token; selesaikan reset via Frappe dahulu.
+
+  Sukses menyimpan access_token, refresh_token dan login_user_profile di runtime.
+  user hanya allowlist profil sendiri + roles; tidak pernah full User, password,
+  API key/secret atau hash. Challenge MFA hanya mfa_required/tmp_id/verification,
+  tanpa token/profile. login_tmp_id disimpan runtime privat. Lanjutkan Complete MFA
+  dengan FRAPPE_LOGIN_OTP; tidak perlu kirim password lagi. Jika --tags password-login
+  mendapat MFA, Current User berhenti sebelum HTTP; gunakan flow interaktif README.
+  Contoh native berikut ilustratif, bukan credential atau rekaman respons nyata.
+}
+
+example {
+  name: Password login success with own profile (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.login
+    method: post
+    mode: json
+    body:json: {
+      {"usr":"login-user@example.test","pwd":"<password-from-process-env>","client_id":"bruno-review"}
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":{"access_token":"<jwt-access-token>","refresh_token":"<opaque-refresh-token>","token_type":"Bearer","expires_in":900,"user":{"name":"login-user@example.test","email":"login-user@example.test","first_name":"Login","last_name":"User","full_name":"Login User","user_image":null,"language":"en","time_zone":"UTC","user_type":"System User","roles":["All"]}}}
+      '''
+    }
+  }
+}
+
+example {
+  name: MFA challenge without tokens or profile (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.login
+    method: post
+    mode: json
+    body:json: {
+      {"usr":"login-user@example.test","pwd":"<password-from-process-env>","client_id":"bruno-review"}
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":{"mfa_required":true,"tmp_id":"<private-native-challenge-id>","verification":{"method":"OTP","setup":true}}}
+      '''
+    }
+  }
+}
+
+example {
+  name: Invalid native credentials (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.login
+    method: post
+    mode: json
+    body:json: {
+      {"usr":"login-user@example.test","pwd":"<invalid-password>"}
+    }
+  }
+  response: {
+    status: {
+      code: 401
+    }
+    body: {
+      type: json
+      content: '''
+        {"exc_type":"AuthenticationError","exception":"frappe.exceptions.AuthenticationError: Invalid login credentials"}
+      '''
+    }
+  }
+}

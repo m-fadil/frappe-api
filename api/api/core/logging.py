@@ -4,16 +4,17 @@ import functools
 import json
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Literal
 
 import frappe
 from frappe.utils import cstr
+from werkzeug.exceptions import HTTPException
 
-from .exceptions import (
-	ApiException,
-	ForbiddenException,
-	ServiceUnavailableException,
-)
+from .exceptions import ApiException, InternalServerErrorException
+
+Telemetry = Literal["standard", "auth_metadata_only"]
+STANDARD: Telemetry = "standard"
+AUTH_METADATA_ONLY: Telemetry = "auth_metadata_only"
 
 DEFAULT_SENSITIVE_FIELDS = {
 	"password",
@@ -76,8 +77,6 @@ def _get_settings() -> dict[str, Any]:
 		return get_settings()
 	except Exception:
 		return {
-			"enable_api": 1,
-			"allow_guest_access": 1,
 			"enable_logging": 1,
 			"log_errors_only": 0,
 			"log_request_payload": 1,
@@ -260,27 +259,62 @@ def record_api_log(
 		pass
 
 
-def log():
+def _native_http_status(exc: Exception) -> int | None:
+	if isinstance(exc, HTTPException):
+		return exc.code
+	status = getattr(exc, "http_status_code", None)
+	return status if isinstance(status, int) else None
+
+
+def _record_auth_metadata(endpoint: str, status_code: int, start_time: float) -> None:
+	"""Emit only fixed, credential-free completion fields, independent of API log settings."""
+	try:
+		frappe.logger("api_auth", allow_site=True).info(
+			{
+				"event": "endpoint_failed" if status_code >= 400 else "endpoint_completed",
+				"endpoint": endpoint,
+				"status_code": status_code,
+				"execution_time_ms": round((time.perf_counter() - start_time) * 1000, 2),
+			}
+		)
+	except Exception:
+		pass
+
+
+def log(*, telemetry: Telemetry = STANDARD):
+	if telemetry not in (STANDARD, AUTH_METADATA_ONLY):
+		raise ValueError(f"Unsupported telemetry mode: {telemetry!r}")
+
 	def decorate(fn: Callable[..., Any]) -> Callable[..., Any]:
 		endpoint_name = f"{fn.__module__}.{fn.__qualname__}"
 
+		if telemetry == AUTH_METADATA_ONLY:
+
+			@functools.wraps(fn)
+			def invoke_auth(*args: Any, **kwargs: Any) -> Any:
+				frappe.local.response_headers["Cache-Control"] = "no-store"
+				frappe.local.response_headers["Pragma"] = "no-cache"
+				start_time = time.perf_counter()
+				try:
+					result = fn(*args, **kwargs)
+				except Exception as exc:
+					status_code = _native_http_status(exc)
+					_record_auth_metadata(
+						endpoint_name, status_code if status_code is not None else 500, start_time
+					)
+					if status_code is not None:
+						raise
+					# Do not expose or log an exception message, payload or credential-bearing traceback.
+					raise InternalServerErrorException(
+						"An unexpected error occurred", code="INTERNAL_SERVER_ERROR"
+					) from None
+				_record_auth_metadata(endpoint_name, 200, start_time)
+				return result
+
+			return invoke_auth
+
 		@functools.wraps(fn)
 		def invoke(*args: Any, **kwargs: Any) -> Any:
-			settings = _get_settings()
-
-			if not settings.get("enable_api", 1):
-				raise ServiceUnavailableException(
-					"API service is currently disabled",
-					code="API_DISABLED",
-				)
-
-			user = _get_current_user()
-			if user == "Guest" and not settings.get("allow_guest_access", 1):
-				raise ForbiddenException(
-					"Guest access to API is disabled",
-					code="GUEST_ACCESS_DISABLED",
-				)
-
 			start_time = time.perf_counter()
 			req_payload = kwargs if kwargs else (args[0] if args else None)
 
@@ -318,6 +352,8 @@ def log():
 				return err_resp
 
 			except Exception as exc:
+				if _native_http_status(exc) is not None:
+					raise
 				elapsed_ms = (time.perf_counter() - start_time) * 1000
 				tb = None
 				try:

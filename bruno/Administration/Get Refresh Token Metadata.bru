@@ -1,0 +1,60 @@
+meta {
+  name: Get Refresh Token Metadata
+  type: http
+  seq: 6
+  tags: [
+    admin-read
+  ]
+}
+
+get {
+  url: {{base_url}}/api/resource/API%20Refresh%20Token/{{refresh_token_name}}
+  body: none
+  auth: bearer
+}
+
+auth:bearer {
+  token: {{access_token}}
+}
+
+docs {
+  Rute REST v1 bawaan Frappe, bukan endpoint RPC kustom aplikasi. Sumber framework: frappe/api/v1.py (routing, izin dan operasi dokumen), frappe/api/__init__.py (envelope data). Syarat: base_url situs tanpa slash akhir; access_token JWT aktif dari Authentication milik pengguna System Manager. Izin DocType tetap diperiksa; token tidak memberikan hak tambahan. Error framework dapat berupa 401 AuthenticationError, 403 PermissionError, 404 DoesNotExistError, atau 417 ValidationError; bentuk exc_type/exception/_server_messages bukan envelope error kustom aplikasi. Contoh tersimpan sintetis, disanitasi, ilustratif, bukan hasil eksekusi; representasi dokumen dapat memuat field tambahan.
+
+  Sumber schema/controller aplikasi: api/rest_api/doctype/api_refresh_token/api_refresh_token.json dan api_refresh_token.py. Syarat tambahan WAJIB: JWT pengguna System Manager non-Administrator tanpa grant read permlevel 1; refresh_token_name nyata dari daftar. Sukses 200: data dokumen metadata saja. token_hash berada di permlevel 1 dan dihapus oleh read_doc -> apply_fieldlevel_read_permissions (frappe/model/document.py). Administrator melewati filter field-level; JANGAN jalankan detail sebagai Administrator atau pengguna dengan akses level 1 karena hash dapat terbuka. Parameter fields tidak memproyeksi GET detail native. Untuk akun berhak lebih tinggi, gunakan request List Refresh Token Metadata yang memproyeksi field aman. Nama tidak ada: 404. Tidak ada token plaintext tersimpan; jangan meminta hash.
+  Payload: tidak ada (GET); parameter hanya URL/query.
+}
+
+example {
+  name: Ilustratif sintetis - Get Refresh Token Metadata
+  description: Respons sintetis disanitasi; bukan hasil request nyata
+  request: {
+    url: {{base_url}}/api/resource/API%20Refresh%20Token/{{refresh_token_name}}
+    method: get
+    mode: none
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {
+          "data": {
+            "doctype": "API Refresh Token",
+            "name": "illustrative-session-001",
+            "user": "manager@example.invalid",
+            "client_id": "bruno-demo",
+            "family_id": "illustrative-family-001",
+            "expires_at": "2026-11-30 12:00:00",
+            "used_at": null,
+            "revoked_at": null,
+            "replaced_by": null,
+            "ip_address": "192.0.2.10",
+            "user_agent": "Bruno illustrative"
+          }
+        }
+      '''
+    }
+  }
+}

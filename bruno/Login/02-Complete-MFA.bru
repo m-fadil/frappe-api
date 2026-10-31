@@ -1,0 +1,139 @@
+meta {
+  name: Complete native MFA challenge
+  type: http
+  seq: 2
+  tags: [
+    mfa
+  ]
+}
+
+post {
+  url: {{base_url}}/api/method/api.auth.login
+  body: json
+  auth: none
+}
+
+headers {
+  Content-Type: application/json
+}
+
+body:json {
+  {
+    "otp": "{{login_otp}}",
+    "tmp_id": "{{login_tmp_id}}",
+    "client_id": "{{client_id}}"
+  }
+}
+
+script:pre-request {
+  if (!bru.getVar("login_tmp_id")) {
+    throw new Error("Run Login first in this runtime and obtain an MFA challenge");
+  }
+  if (!bru.getEnvVar("login_otp")) {
+    throw new Error("Configure FRAPPE_LOGIN_OTP privately with the current native MFA code");
+  }
+  bru.setVar("access_token", "");
+  bru.setVar("refresh_token", "");
+  bru.setVar("login_user_profile", null);
+  req.setBody({
+    otp: bru.interpolate("{{login_otp}}"),
+    tmp_id: bru.getVar("login_tmp_id"),
+    client_id: bru.interpolate("{{client_id}}")
+  });
+}
+
+script:post-response {
+  if (res.status === 200 && res.body.message) {
+    const result = res.body.message;
+    if (result.access_token && result.refresh_token && result.user) {
+      bru.setVar("access_token", result.access_token);
+      bru.setVar("refresh_token", result.refresh_token);
+      bru.setVar("login_user_profile", result.user);
+      bru.setVar("login_tmp_id", "");
+    }
+  }
+}
+
+tests {
+  test("MFA completion returns a JWT pair and only safe own profile fields", function () {
+    expect(res.status).to.equal(200);
+    expect(res.headers["cache-control"]).to.include("no-store");
+    const result = res.body.message;
+    expect(result.token_type).to.equal("Bearer");
+    expect(result.access_token).to.be.a("string").and.not.to.equal("");
+    expect(result.refresh_token).to.be.a("string").and.not.to.equal("");
+    expect(result.expires_in).to.be.above(0);
+    expect(result.user.name).to.be.a("string").and.not.to.equal("Guest");
+    expect(result.user.roles).to.be.an("array");
+    const allowed = ["name", "email", "first_name", "last_name", "full_name", "user_image", "language", "time_zone", "user_type", "roles"];
+    expect(Object.keys(result.user).every(key => allowed.includes(key))).to.equal(true);
+    expect(bru.getVar("login_tmp_id")).to.equal("");
+  });
+}
+
+docs {
+  # MFA continuation, terpisah dari password-login default
+
+  Hanya tag mfa, bukan password-login atau auth-flow. Jalankan setelah Login
+  menghasilkan challenge; login_tmp_id harus tetap ada dalam runtime yang sama.
+  Kirim tmp_id + otp ke api.auth.login, tanpa usr/pwd, API key atau cookie sid.
+  client_id tetap label runtime. Native OTP/email/SMS dan masa berlaku challenge
+  mengikuti konfigurasi Frappe; baca verification dari challenge tanpa mengekspornya.
+  Jangan cetak OTP/tmp_id/token atau simpan ke tracked environment/report.
+
+  Sukses menyimpan pair dan login_user_profile; menghapus login_tmp_id runtime.
+  Backend mengonsumsi native challenge saat berhasil sehingga tidak dapat direplay.
+  Challenge expired/hilang atau credentials invalid: native AuthenticationError,
+  tanpa token/profile. Mulai Login baru jika challenge expired, jangan replay sukses.
+  Error reset wajib harus diselesaikan dengan reset native sebelum login ulang.
+  Tidak membuat authenticated Frappe sid. DTO/pipes, normalize=false,
+  AUTH_METADATA_ONLY, api_enabled, rate limit 10/IP/menit dan no-store sama dengan
+  langkah awal. --tags mfa sendiri di invocation CLI baru tidak membawa runtime
+  challenge dari invocation lama; gunakan GUI untuk kode email/SMS interaktif.
+}
+
+example {
+  name: Native MFA completion success (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.login
+    method: post
+    mode: json
+    body:json: {
+      {"otp":"<current-code-from-process-env>","tmp_id":"<private-native-challenge-id>","client_id":"bruno-review"}
+    }
+  }
+  response: {
+    status: {
+      code: 200
+    }
+    body: {
+      type: json
+      content: '''
+        {"message":{"access_token":"<jwt-access-token>","refresh_token":"<opaque-refresh-token>","token_type":"Bearer","expires_in":900,"user":{"name":"login-user@example.test","email":"login-user@example.test","first_name":"Login","last_name":"User","full_name":"Login User","user_image":null,"language":"en","time_zone":"UTC","user_type":"System User","roles":["All"]}}}
+      '''
+    }
+  }
+}
+
+example {
+  name: Missing expired or replayed native challenge (illustrative)
+  request: {
+    url: {{base_url}}/api/method/api.auth.login
+    method: post
+    mode: json
+    body:json: {
+      {"otp":"<current-code-from-process-env>","tmp_id":"<expired-native-challenge-id>"}
+    }
+  }
+  response: {
+    status: {
+      code: 401
+    }
+    body: {
+      type: json
+      content: '''
+        {"exc_type":"AuthenticationError","exception":"frappe.exceptions.AuthenticationError: Invalid or expired login challenge"}
+      '''
+    }
+  }
+}
