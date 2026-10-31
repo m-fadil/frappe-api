@@ -1,15 +1,20 @@
+import json
+from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
 
+import frappe
+from werkzeug.exceptions import Unauthorized
+
 from api.api.core.exceptions import (
 	BadRequestException,
-	ForbiddenException,
-	ServiceUnavailableException,
+	InternalServerErrorException,
 	UnprocessableEntityException,
 )
 from api.api.core.logging import (
+	AUTH_METADATA_ONLY,
+	STANDARD,
 	_mask_data,
-	_safe_serialize,
 	_to_legacy_error_response,
 	log,
 	record_api_log,
@@ -40,60 +45,95 @@ class TestLogging(TestCase):
 	def test_log_decorator_catches_api_exception_and_returns_error_dict(self):
 		@log()
 		def faulty():
-			raise BadRequestException("Bad input", code="BAD_INPUT")
+			raise BadRequestException("Bad input", code="BAD_INPUT", payload={"field": "email"})
 
-		resp = faulty()
-		self.assertEqual(resp["_status_code"], 400)
-		self.assertEqual(resp["_code"], "BAD_INPUT")
-		self.assertEqual(resp["_detail"], "Bad input")
+		local = SimpleNamespace(response={})
+		with (
+			patch("api.api.core.logging.record_api_log") as record,
+			patch("api.api.core.logging.frappe.local", local),
+		):
+			resp = faulty()
+		self.assertEqual(
+			resp,
+			{
+				"_status_code": 400,
+				"_title": "Bad Request",
+				"_code": "BAD_INPUT",
+				"_detail": "Bad input",
+				"_payload": {"field": "email"},
+			},
+		)
+		self.assertEqual(local.response["http_status_code"], 400)
+		record.assert_called_once()
+		self.assertEqual(record.call_args.kwargs["response_data"], resp)
+		self.assertEqual(record.call_args.kwargs["error_message"], "Bad input")
 
 	def test_log_decorator_catches_generic_exception_and_returns_500(self):
 		@log()
 		def crash():
 			raise ZeroDivisionError("division by zero")
 
-		resp = crash()
+		local = SimpleNamespace(response={})
+		with (
+			patch("api.api.core.logging.record_api_log") as record,
+			patch("api.api.core.logging.frappe.local", local),
+			patch("api.api.core.logging.frappe.get_traceback", return_value="business traceback"),
+		):
+			resp = crash()
 		self.assertEqual(resp["_status_code"], 500)
 		self.assertEqual(resp["_code"], "INTERNAL_SERVER_ERROR")
-		self.assertIn("division by zero", resp["_detail"])
+		self.assertEqual(resp["_detail"], "division by zero")
+		self.assertEqual(local.response["http_status_code"], 500)
+		record.assert_called_once()
+		self.assertEqual(record.call_args.kwargs["traceback_str"], "business traceback")
 
-	def test_log_decorator_returns_success_result(self):
-		@log()
-		def succeed():
+	def test_log_decorator_returns_and_records_success_result(self):
+		@log(telemetry=STANDARD)
+		def succeed(**kwargs):
 			return {"message": "ok"}
 
-		self.assertEqual(succeed(), {"message": "ok"})
+		with patch("api.api.core.logging.record_api_log") as record:
+			self.assertEqual(succeed(value="hello"), {"message": "ok"})
+		record.assert_called_once()
+		self.assertEqual(record.call_args.kwargs["request_data"], {"value": "hello"})
+		self.assertEqual(record.call_args.kwargs["response_data"], {"message": "ok"})
+		self.assertEqual(record.call_args.kwargs["status_code"], 200)
 
-	def test_log_decorator_blocks_request_when_api_disabled(self):
-		disabled_settings = {"enable_api": 0}
-
-		with patch("api.api.core.logging._get_settings", return_value=disabled_settings):
-
-			@log()
-			def test_endpoint():
-				return "ok"
-
-			with self.assertRaises(ServiceUnavailableException) as ctx:
-				test_endpoint()
-
-			self.assertEqual(ctx.exception.code, "API_DISABLED")
-
-	def test_log_decorator_blocks_guest_when_guest_access_disabled(self):
-		guest_disabled_settings = {"enable_api": 1, "allow_guest_access": 0}
-
-		with (
-			patch("api.api.core.logging._get_settings", return_value=guest_disabled_settings),
-			patch("api.api.core.logging.frappe.session", MagicMock(user="Guest")),
+	def test_log_decorator_preserves_native_http_errors_and_statuses(self):
+		for exception_type, status in (
+			(frappe.AuthenticationError, 401),
+			(frappe.PermissionError, 403),
+			(frappe.ValidationError, 417),
+			(frappe.RateLimitExceededError, 429),
+			(Unauthorized, 401),
 		):
+			with self.subTest(exception_type=exception_type):
+				error = exception_type("Native rejection")
 
-			@log()
-			def guest_endpoint():
-				return "ok"
+				@log()
+				def reject():
+					raise error
 
-			with self.assertRaises(ForbiddenException) as ctx:
-				guest_endpoint()
+				local = SimpleNamespace(response={})
+				with (
+					patch("api.api.core.logging.record_api_log") as record,
+					patch("api.api.core.logging.frappe.local", local),
+					patch("api.api.core.logging.frappe.get_traceback") as traceback,
+				):
+					with self.assertRaises(exception_type) as caught:
+						reject()
+				self.assertIs(caught.exception, error)
+				self.assertEqual(
+					getattr(caught.exception, "http_status_code", getattr(caught.exception, "code", None)),
+					status,
+				)
+				self.assertNotIn("http_status_code", local.response)
+				record.assert_not_called()
+				traceback.assert_not_called()
 
-			self.assertEqual(ctx.exception.code, "GUEST_ACCESS_DISABLED")
+	def test_log_rejects_unknown_telemetry_before_decoration(self):
+		with self.assertRaises(ValueError):
+			log(telemetry="unknown")
 
 	def test_mask_data_masks_nested_sensitive_keys(self):
 		data = {
@@ -143,3 +183,143 @@ class TestLogging(TestCase):
 		):
 			record_api_log(endpoint="api.api.ping.ping.ping", status_code=200, execution_time_ms=5.0)
 			mock_get_doc.assert_not_called()
+
+
+class TestAuthMetadataLogging(TestCase):
+	def setUp(self):
+		self.credential = "credential-that-must-never-appear"
+		self.local = SimpleNamespace(
+			response_headers={},
+			response={},
+			form_dict={"refresh_token": self.credential},
+		)
+		self.request = MagicMock()
+		self.request.headers = {"Authorization": f"Bearer {self.credential}"}
+		self.settings = self.enterContext(
+			patch(
+				"api.api.core.logging._get_settings",
+				return_value={
+					"enable_logging": 1,
+					"log_request_payload": 1,
+					"log_response_payload": 1,
+					"log_headers": 1,
+					"mask_sensitive_data": 0,
+				},
+			)
+		)
+		self.record = self.enterContext(patch("api.api.core.logging.record_api_log"))
+		self.extract = self.enterContext(patch("api.api.core.logging._extract_request_context"))
+		self.serialize = self.enterContext(patch("api.api.core.logging._safe_serialize"))
+		self.traceback = self.enterContext(patch("api.api.core.logging.frappe.get_traceback"))
+		self.get_logger = self.enterContext(patch("api.api.core.logging.frappe.logger"))
+		self.logger = self.get_logger.return_value
+		self.enterContext(patch("api.api.core.logging.frappe.local", self.local))
+		self.enterContext(patch("api.api.core.logging.frappe.request", self.request))
+
+	def assert_metadata_only(self, endpoint, status):
+		self.get_logger.assert_called_once_with("api_auth", allow_site=True)
+		self.logger.info.assert_called_once()
+		args, kwargs = self.logger.info.call_args
+		self.assertEqual(kwargs, {})
+		self.assertEqual(len(args), 1)
+		metadata = args[0]
+		self.assertEqual(set(metadata), {"event", "endpoint", "status_code", "execution_time_ms"})
+		self.assertEqual(metadata["endpoint"], f"{endpoint.__module__}.{endpoint.__qualname__}")
+		self.assertEqual(metadata["status_code"], status)
+		self.assertEqual(metadata["event"], "endpoint_failed" if status >= 400 else "endpoint_completed")
+		self.assertIsInstance(metadata["execution_time_ms"], float)
+		self.assertGreaterEqual(metadata["execution_time_ms"], 0)
+		self.assertNotIn(self.credential, json.dumps(metadata))
+		self.assertEqual(self.local.response_headers, {"Cache-Control": "no-store", "Pragma": "no-cache"})
+		self.assertNotIn("http_status_code", self.local.response)
+		self.record.assert_not_called()
+		self.extract.assert_not_called()
+		self.serialize.assert_not_called()
+		self.traceback.assert_not_called()
+		self.settings.assert_not_called()
+		self.assertEqual(self.request.mock_calls, [])
+
+	def test_success_never_logs_arguments_or_result_even_with_masking_disabled(self):
+		result = {"access_token": self.credential, "refresh_token": self.credential}
+
+		@log(telemetry=AUTH_METADATA_ONLY)
+		def issue(body, **kwargs):
+			self.assertEqual(self.local.response_headers["Cache-Control"], "no-store")
+			self.assertEqual(self.local.response_headers["Pragma"], "no-cache")
+			self.assertEqual(body, {"password": self.credential})
+			self.assertEqual(kwargs, {"client_id": self.credential})
+			return result
+
+		self.assertIs(issue({"password": self.credential}, client_id=self.credential), result)
+		self.assert_metadata_only(issue, 200)
+
+	def test_native_errors_keep_consumer_status_without_logging_exception_messages(self):
+		for exception_type, status in (
+			(frappe.AuthenticationError, 401),
+			(frappe.PermissionError, 403),
+			(frappe.ValidationError, 417),
+			(frappe.RateLimitExceededError, 429),
+			(Unauthorized, 401),
+		):
+			with self.subTest(exception_type=exception_type):
+				self.get_logger.reset_mock()
+				error = exception_type(self.credential)
+
+				@log(telemetry=AUTH_METADATA_ONLY)
+				def reject(**kwargs):
+					self.assertEqual(self.local.response_headers["Cache-Control"], "no-store")
+					raise error
+
+				with self.assertRaises(exception_type) as caught:
+					reject(refresh_token=self.credential)
+				self.assertIs(caught.exception, error)
+				self.assertEqual(
+					getattr(caught.exception, "http_status_code", getattr(caught.exception, "code", None)),
+					status,
+				)
+				self.assert_metadata_only(reject, status)
+
+	def test_payload_bearing_api_exception_is_not_serialized_or_logged(self):
+		error = BadRequestException(
+			self.credential,
+			code=self.credential,
+			payload={"refresh_token": self.credential},
+		)
+
+		@log(telemetry=AUTH_METADATA_ONLY)
+		def reject(body):
+			raise error
+
+		with self.assertRaises(BadRequestException) as caught:
+			reject({"refresh_token": self.credential})
+		self.assertIs(caught.exception, error)
+		self.assert_metadata_only(reject, 400)
+
+	def test_generic_error_with_credential_text_propagates_only_sanitized_framework_error(self):
+		@log(telemetry=AUTH_METADATA_ONLY)
+		def crash(body):
+			raise RuntimeError(f"Refresh credential rejected: {self.credential}")
+
+		with self.assertRaises(InternalServerErrorException) as caught:
+			crash({"refresh_token": self.credential})
+		self.assertEqual(caught.exception.http_status_code, 500)
+		self.assertEqual(caught.exception.message, "An unexpected error occurred")
+		self.assertEqual(caught.exception.code, "INTERNAL_SERVER_ERROR")
+		self.assertEqual(caught.exception.payload, {})
+		self.assertNotIn(self.credential, str(caught.exception))
+		self.assertTrue(caught.exception.__suppress_context__)
+		self.assertIsNone(caught.exception.__cause__)
+		self.assert_metadata_only(crash, 500)
+
+	def test_generic_error_is_never_stringified(self):
+		class CredentialError(Exception):
+			def __str__(self):
+				raise AssertionError("Exception messages must never be extracted")
+
+		@log(telemetry=AUTH_METADATA_ONLY)
+		def crash():
+			raise CredentialError(self.credential)
+
+		with self.assertRaises(InternalServerErrorException):
+			crash()
+		self.assert_metadata_only(crash, 500)

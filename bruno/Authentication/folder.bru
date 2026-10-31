@@ -1,0 +1,18 @@
+meta {
+  name: Authentication
+  seq: 2
+}
+
+docs {
+  JWT P1: issue dengan native Frappe auth, pakai access JWT, rotate refresh sekali,
+  lalu revoke family. Jalankan berurutan dan gunakan --disable-cookies untuk CLI.
+  Credential yang dikembalikan hanya disimpan dalam runtime variables.
+  Access-token expiry default 900 detik; refresh family 2592000 detik absolut.
+  Konfigurasi: API Settings field → site_config → defaults/init install/migrate.
+  Jangan kirim access JWT expired ke refresh/revoke dan jangan parallel refresh.
+  Semua endpoint auth sekarang melalui @endpoint: DTO + pipes, normalize=false,
+  telemetry AUTH_METADATA_ONLY. Policy issue: api_enabled + native_authenticated;
+  refresh/revoke: api_enabled. enable_api=0 memblokir semua auth; allow_guest_access=0
+  tidak memblokir refresh/revoke dengan credential valid. Policy/validation failures
+  tetap no-store; native AuthenticationError/ValidationError tidak berubah menjadi500.
+}
