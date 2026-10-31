@@ -58,6 +58,7 @@ def validate() -> None:
 		frappe.local.response_headers["WWW-Authenticate"] = 'Bearer error="invalid_token"'
 		raise frappe.AuthenticationError("Invalid or expired access token") from None
 	form_dict = frappe.local.form_dict
-	frappe.set_user(claims["sub"])
+	# Frappe requires set_user in auth hooks; signature, claims and active user are verified above.
+	frappe.set_user(claims["sub"])  # nosemgrep: frappe-setuser
 	frappe.local.form_dict = form_dict
 	frappe.local.api_auth_method = "jwt"
