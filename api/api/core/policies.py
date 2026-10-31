@@ -17,7 +17,7 @@ class RequestContext:
 	endpoint: str
 
 
-type Policy = Callable[[RequestContext], None]
+Policy = Callable[[RequestContext], None]
 
 
 def api_enabled(ctx: RequestContext) -> None:
