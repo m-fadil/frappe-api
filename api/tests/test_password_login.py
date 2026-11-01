@@ -452,7 +452,10 @@ class TestPasswordLogin(FrappeTestCase):
 		tmp_id, secret = self._challenge()
 		frappe.db.commit()
 		barrier = Barrier(3)
-		with ThreadPoolExecutor(max_workers=2) as executor:
+		with (
+			patch("frappe.auth.should_run_2fa", return_value=True),
+			ThreadPoolExecutor(max_workers=2) as executor,
+		):
 			with frappe.cache.lock(frappe.cache.make_key(f"api:password-login:{tmp_id}"), timeout=20):
 				futures = [
 					executor.submit(

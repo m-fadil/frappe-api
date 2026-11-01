@@ -19,7 +19,9 @@ class TestIssueRateLimit(TestCase):
 		self.session = frappe._dict(user=self.users[0])
 		stack.enter_context(patch.object(frappe, "session", self.session))
 		stack.enter_context(patch.object(frappe, "form_dict", {"cmd": "spoofed", "user": self.users[1]}))
-		stack.enter_context(patch.object(frappe.local, "request", SimpleNamespace(method="POST"), create=True))
+		stack.enter_context(
+			patch.object(frappe.local, "request", SimpleNamespace(method="POST"), create=True)
+		)
 		stack.enter_context(patch.object(frappe.local, "response_headers", {}, create=True))
 		stack.enter_context(patch.object(frappe.local, "api_auth_method", None, create=True))
 		stack.enter_context(patch("api.api.core.policies.get_settings", return_value={"enable_api": 1}))

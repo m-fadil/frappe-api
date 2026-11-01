@@ -200,7 +200,7 @@ override_whitelisted_methods = {
 # Request Events
 # ----------------
 # before_request = ["api.utils.before_request"]
-# after_request = ["api.utils.after_request"]
+after_request = ["api.api.core.response.apply_response_headers"]
 
 # Job Events
 # ----------

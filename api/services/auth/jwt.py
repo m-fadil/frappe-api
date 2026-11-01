@@ -6,6 +6,7 @@ import time
 import frappe
 import jwt
 
+from api.api.core.response import response_headers
 from api.services.auth.audit import audit
 from api.services.auth.settings import get_jwt_settings
 from api.services.auth.users import active_user
@@ -55,7 +56,7 @@ def validate() -> None:
 			raise jwt.InvalidTokenError()
 	except jwt.PyJWTError:
 		audit("jwt_rejected")
-		frappe.local.response_headers["WWW-Authenticate"] = 'Bearer error="invalid_token"'
+		response_headers()["WWW-Authenticate"] = 'Bearer error="invalid_token"'
 		raise frappe.AuthenticationError("Invalid or expired access token") from None
 	form_dict = frappe.local.form_dict
 	# Frappe requires set_user in auth hooks; signature, claims and active user are verified above.

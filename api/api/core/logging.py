@@ -11,6 +11,7 @@ from frappe.utils import cstr
 from werkzeug.exceptions import HTTPException
 
 from .exceptions import ApiException, InternalServerErrorException
+from .response import response_headers
 
 Telemetry = Literal["standard", "auth_metadata_only"]
 STANDARD: Telemetry = "standard"
@@ -292,8 +293,7 @@ def log(*, telemetry: Telemetry = STANDARD):
 
 			@functools.wraps(fn)
 			def invoke_auth(*args: Any, **kwargs: Any) -> Any:
-				frappe.local.response_headers["Cache-Control"] = "no-store"
-				frappe.local.response_headers["Pragma"] = "no-cache"
+				response_headers().update({"Cache-Control": "no-store", "Pragma": "no-cache"})
 				start_time = time.perf_counter()
 				try:
 					result = fn(*args, **kwargs)
