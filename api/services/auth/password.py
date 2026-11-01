@@ -24,10 +24,39 @@ class _PasswordLoginManager(LoginManager):
 		self.info = None
 		self.full_name = None
 		self.user_type = None
-		self.user_lang = None
 		self.resume = False
 		self.authenticated = False
 		self.challenge_verified = False
+
+	def login(self):
+		# Frappe 15 checks password expiry before OTP and omits before_login.
+		# Preserve the newer ordering: a reset key must not be issued until
+		# the second factor has been verified.
+		self.run_trigger("before_login")
+		if frappe.get_system_settings("disable_user_pass_login"):
+			frappe.throw(_("Login with username and password is not allowed."), frappe.AuthenticationError)
+
+		user, pwd = frappe.auth.get_cached_user_pass()
+		if frappe.form_dict.get("tmp_id") and user and not frappe.auth.should_run_2fa(user):
+			frappe.throw(
+				_("Two-factor login is no longer available; retry login"), frappe.AuthenticationError
+			)
+		self.authenticate(user=user, pwd=pwd)
+		frappe.clear_cache(user=self.user)
+
+		if frappe.form_dict.get("tmp_id") or frappe.auth.should_run_2fa(self.user):
+			frappe.auth.authenticate_for_2factor(self.user)
+			if not frappe.auth.confirm_otp_token(self):
+				return False
+
+		if self.force_user_to_reset_password():
+			doc = frappe.get_doc("User", self.user)
+			doc._reset_password(send_email=True, password_expired=True)
+			frappe.local.response["message"] = "Password Reset"
+			return False
+
+		frappe.form_dict.pop("pwd", None)
+		self.post_login()
 
 	def force_user_to_reset_password(self):
 		# Native login reaches this check only after any required OTP passed.
@@ -122,8 +151,12 @@ def authenticate_login(
 		):
 			# Never fall back to caller-supplied credentials for an expired or
 			# replayed challenge. Native login reads these same site-scoped keys.
-			for suffix in ("_usr", "_pwd", "_otp_secret"):
-				if not cache.get_value(tmp_id + suffix, use_local_cache=False):
+			for suffix in _CHALLENGE_SUFFIXES:
+				key = cache.make_key(tmp_id + suffix)
+				# Frappe 15's get_value(expires=True) may still read a stale
+				# request-local entry; native OTP handling must see Redis.
+				frappe.local.cache.pop(key, None)
+				if suffix != "_token" and not cache.get(key):
 					frappe.throw(
 						_("Login session expired, retry with your username and password"),
 						frappe.AuthenticationError,

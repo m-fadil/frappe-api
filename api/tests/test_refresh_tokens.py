@@ -8,14 +8,14 @@ from threading import Barrier
 from unittest.mock import patch
 
 import frappe
-from frappe.tests import IntegrationTestCase
+from frappe.tests.utils import FrappeTestCase
 from frappe.utils import get_datetime
 
 from api.services.auth import refresh_tokens
 from api.services.auth.settings import get_jwt_settings
 
 
-class TestRefreshTokens(IntegrationTestCase):
+class TestRefreshTokens(FrappeTestCase):
 	"""Exercise committed rows and independent competing database consumers."""
 
 	def setUp(self):
