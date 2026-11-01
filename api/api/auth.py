@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from functools import wraps
+
 import frappe
 from frappe.rate_limiter import rate_limit
 
@@ -21,6 +23,37 @@ from api.services.auth.refresh_tokens import revoke as revoke_session
 from api.services.auth.users import get_user_profile
 
 
+def _issue_rate_limit(fn):
+	"""Limit token issuance per authenticated user in a fixed 60-second window."""
+
+	@wraps(fn)
+	def wrapper(*args, **kwargs):
+		if not getattr(frappe.local, "request", None):
+			return fn(*args, **kwargs)
+
+		key = frappe.cache.make_key(f"rl:api.api.auth.issue:{frappe.session.user}")
+		count = frappe.cache.eval(
+			"""
+			local count = redis.call('INCR', KEYS[1])
+			if count == 1 then
+				redis.call('EXPIRE', KEYS[1], ARGV[1])
+			end
+			return count
+			""",
+			1,
+			key,
+			60,
+		)
+		if count > 20:
+			frappe.throw(
+				frappe._("You hit the rate limit because of too many requests. Please try after sometime."),
+				frappe.RateLimitExceededError,
+			)
+		return fn(*args, **kwargs)
+
+	return wrapper
+
+
 @endpoint(
 	methods=("POST",),
 	guest=True,
@@ -30,7 +63,7 @@ from api.services.auth.users import get_user_profile
 	normalize=False,
 	telemetry=AUTH_METADATA_ONLY,
 )
-@rate_limit(limit=20, seconds=60, user_based=True)
+@_issue_rate_limit
 def issue(body: IssueTokenDTO) -> dict:
 	"""Exchange native Frappe authentication; JWT cannot bootstrap another family."""
 	user = frappe.session.user

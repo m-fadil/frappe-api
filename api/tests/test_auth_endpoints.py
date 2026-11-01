@@ -10,7 +10,8 @@ from api.api.auth_dto import IssueTokenDTO, RefreshTokenDTO, RevokeTokenDTO
 
 class TestAuthEndpoints(TestCase):
 	def setUp(self):
-		stack = self.enterContext(ExitStack())
+		stack = ExitStack()
+		self.addCleanup(stack.close)
 		self.settings = {
 			"enable_api": 1,
 			"allow_guest_access": 0,

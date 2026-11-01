@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 from concurrent.futures import ThreadPoolExecutor, wait
+from contextlib import ExitStack
 from datetime import datetime
 from threading import Barrier
 from unittest.mock import patch
@@ -9,7 +10,7 @@ from unittest.mock import patch
 import frappe
 import pyotp
 from frappe.auth import CookieManager, LoginAttemptTracker
-from frappe.tests import IntegrationTestCase
+from frappe.tests.utils import FrappeTestCase
 from frappe.twofactor import get_otpsecret_for_, set_default
 from frappe.utils import add_days, today
 from frappe.utils.password import set_encrypted_password, update_password
@@ -21,7 +22,7 @@ from api.services.auth import users
 _MISSING = object()
 
 
-class TestPasswordLogin(IntegrationTestCase):
+class TestPasswordLogin(FrappeTestCase):
 	"""Use native password hashes, restriction checks, OTPs and site Redis state."""
 
 	def setUp(self):
@@ -76,14 +77,24 @@ class TestPasswordLogin(IntegrationTestCase):
 			"allow_login_using_user_name": 0,
 			"allow_login_using_mobile_number": 0,
 		}
+		stack = ExitStack()
+		self.addCleanup(stack.close)
 		get_setting = frappe.get_system_settings
-		self.enterContext(
+		stack.enter_context(
 			patch.object(
 				frappe,
 				"get_system_settings",
 				side_effect=lambda key=None: self.settings[key] if key in self.settings else get_setting(key),
 			)
 		)
+		get_single_value = frappe.db.get_single_value
+
+		def configured_single_value(doctype, fieldname, *args, **kwargs):
+			if doctype == "System Settings" and fieldname in self.settings:
+				return self.settings[fieldname]
+			return get_single_value(doctype, fieldname, *args, **kwargs)
+
+		stack.enter_context(patch.object(frappe.db, "get_single_value", side_effect=configured_single_value))
 		get_doc = frappe.get_doc
 
 		def configured_doc(*args, **kwargs):
@@ -94,7 +105,7 @@ class TestPasswordLogin(IntegrationTestCase):
 				doc.allow_login_after_fail = 300
 			return doc
 
-		self.enterContext(patch.object(frappe, "get_doc", side_effect=configured_doc))
+		stack.enter_context(patch.object(frappe, "get_doc", side_effect=configured_doc))
 		self.session = frappe._dict(user="Guest", sid="Guest")
 		self.form = frappe._dict(cmd="api.auth.login", untouched="  original  ")
 		self.response = frappe._dict(message="original response")
@@ -175,7 +186,7 @@ class TestPasswordLogin(IntegrationTestCase):
 
 	def _assert_consumed(self, tmp_id):
 		for suffix in ("_usr", "_pwd", "_otp_secret", "_token"):
-			self.assertIsNone(frappe.cache.get_value(tmp_id + suffix, use_local_cache=False))
+			self.assertIsNone(frappe.cache.get(frappe.cache.make_key(tmp_id + suffix)))
 
 	def test_guest_rpc_preserves_html_password_before_native_authentication(self):
 		from api.api.auth import login
@@ -318,6 +329,17 @@ class TestPasswordLogin(IntegrationTestCase):
 		self.assertEqual(password_login.authenticate_login(None, None, totp.now(), tmp_id), self.user)
 		self._assert_consumed(tmp_id)
 
+	def test_pending_mfa_fails_closed_if_two_factor_is_disabled(self):
+		tmp_id, secret = self._challenge()
+		self.settings["enable_two_factor_auth"] = 0
+		with self.assertRaises(frappe.AuthenticationError):
+			password_login.authenticate_login(None, None, pyotp.TOTP(secret).now(), tmp_id)
+		self.settings["enable_two_factor_auth"] = 1
+		self.assertEqual(
+			password_login.authenticate_login(None, None, pyotp.TOTP(secret).now(), tmp_id), self.user
+		)
+		self._assert_consumed(tmp_id)
+
 	def test_mfa_missing_or_expired_native_cache_never_falls_back_to_password(self):
 		for suffix in ("_usr", "_pwd", "_otp_secret"):
 			with self.subTest(missing=suffix):
@@ -381,7 +403,7 @@ class TestPasswordLogin(IntegrationTestCase):
 			self.challenges.add(tmp_id)
 			self.assertEqual(result["verification"]["method"], method)
 			self.assertTrue(result["verification"]["token_delivery"])
-			token = frappe.cache.get_value(tmp_id + "_token", use_local_cache=False)
+			token = frappe.cache.get_value(tmp_id + "_token", expires=True)
 			self.assertIsNotNone(token)
 			self.assertNotIn(secret, repr(result))
 			self.assertNotIn(self.password, repr(result))
@@ -408,6 +430,23 @@ class TestPasswordLogin(IntegrationTestCase):
 				password_login.authenticate_login(None, None, pyotp.TOTP(secret).now(), tmp_id)
 		self._assert_consumed(tmp_id)
 		self.assertTrue(frappe.db.get_value("User", self.user, "reset_password_key"))
+
+	def test_expired_password_does_not_issue_reset_before_mfa(self):
+		self.settings["force_user_to_reset_password"] = 1
+		frappe.db.set_value("User", self.user, "last_password_reset_date", add_days(today(), -2))
+		with patch("frappe.core.doctype.user.user.User.password_reset_mail") as mail:
+			tmp_id, secret = self._challenge()
+			totp = pyotp.TOTP(secret)
+			wrong = next(f"{value:06d}" for value in range(10) if not totp.verify(f"{value:06d}"))
+			with self.assertRaises(frappe.AuthenticationError):
+				password_login.authenticate_login(None, None, wrong, tmp_id)
+			self.assertFalse(frappe.db.get_value("User", self.user, "reset_password_key"))
+			mail.assert_not_called()
+			with self.assertRaisesRegex(frappe.AuthenticationError, "Password reset required"):
+				password_login.authenticate_login(None, None, totp.now(), tmp_id)
+			self.assertTrue(frappe.db.get_value("User", self.user, "reset_password_key"))
+			mail.assert_called_once()
+		self._assert_consumed(tmp_id)
 
 	def test_concurrent_mfa_completion_has_only_one_consumer(self):
 		tmp_id, secret = self._challenge()

@@ -1,4 +1,5 @@
 import json
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import MagicMock, patch
@@ -187,6 +188,8 @@ class TestLogging(TestCase):
 
 class TestAuthMetadataLogging(TestCase):
 	def setUp(self):
+		stack = ExitStack()
+		self.addCleanup(stack.close)
 		self.credential = "credential-that-must-never-appear"
 		self.local = SimpleNamespace(
 			response_headers={},
@@ -195,7 +198,7 @@ class TestAuthMetadataLogging(TestCase):
 		)
 		self.request = MagicMock()
 		self.request.headers = {"Authorization": f"Bearer {self.credential}"}
-		self.settings = self.enterContext(
+		self.settings = stack.enter_context(
 			patch(
 				"api.api.core.logging._get_settings",
 				return_value={
@@ -207,14 +210,14 @@ class TestAuthMetadataLogging(TestCase):
 				},
 			)
 		)
-		self.record = self.enterContext(patch("api.api.core.logging.record_api_log"))
-		self.extract = self.enterContext(patch("api.api.core.logging._extract_request_context"))
-		self.serialize = self.enterContext(patch("api.api.core.logging._safe_serialize"))
-		self.traceback = self.enterContext(patch("api.api.core.logging.frappe.get_traceback"))
-		self.get_logger = self.enterContext(patch("api.api.core.logging.frappe.logger"))
+		self.record = stack.enter_context(patch("api.api.core.logging.record_api_log"))
+		self.extract = stack.enter_context(patch("api.api.core.logging._extract_request_context"))
+		self.serialize = stack.enter_context(patch("api.api.core.logging._safe_serialize"))
+		self.traceback = stack.enter_context(patch("api.api.core.logging.frappe.get_traceback"))
+		self.get_logger = stack.enter_context(patch("api.api.core.logging.frappe.logger"))
 		self.logger = self.get_logger.return_value
-		self.enterContext(patch("api.api.core.logging.frappe.local", self.local))
-		self.enterContext(patch("api.api.core.logging.frappe.request", self.request))
+		stack.enter_context(patch("api.api.core.logging.frappe.local", self.local))
+		stack.enter_context(patch("api.api.core.logging.frappe.request", self.request))
 
 	def assert_metadata_only(self, endpoint, status):
 		self.get_logger.assert_called_once_with("api_auth", allow_site=True)

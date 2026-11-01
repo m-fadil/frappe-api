@@ -95,6 +95,9 @@ signature, required claims, issuer, audience, token type, and active user.
 Its `frappe.set_user` call has a single-line Semgrep exception for the
 Frappe manual-audit rule; other occurrences remain subject to that rule.
 
+On Frappe 15, token issuance retains the 20-per-minute per-user limit using
+an atomic Redis counter; login, refresh, and revoke retain their IP limits.
+
 For upgrades that introduce DocType changes, run `bench --site <site> migrate`
 and `bench restart`. The auth service reorganization alone only needs the
 clear-cache and restart deployment steps above.
